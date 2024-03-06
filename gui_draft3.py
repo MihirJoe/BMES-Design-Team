@@ -254,6 +254,7 @@ if __name__ == "__main__":
     # 2. gray out all buttons at start
     # 3. change text field to directory label
     # 4. change plot title to session name
+        # 4a. add session label and trial at the top
     # 5. implement next session logic
     # 6. format CSV to have session name as header
     # 7. Get arduino timestamp
