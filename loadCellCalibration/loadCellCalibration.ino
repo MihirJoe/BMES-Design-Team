@@ -5,7 +5,7 @@
 
 HX711 scale;
 
-float calibration_factor = -1229; // Initial calibration factor
+float calibration_factor = -6500; // best for wood 
 float target_weight = 0.0; // Target weight in lbs
 float tolerance = 0.01; // Tolerance for calibration in lbs
 unsigned long start_time = 0; // Variable to store start time for averaging
