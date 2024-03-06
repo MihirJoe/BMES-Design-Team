@@ -2,8 +2,14 @@ import time
 from serial import Serial
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from arduino_connect import *
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 class AnimationPlot:
+
+    def __init__(self, ax):
+        self.ax = ax
 
     def animate(self, i, dataList, ser):
         ser.write(b'g')                                     # Transmit the char 'g' to receive the Arduino data point
@@ -19,34 +25,34 @@ class AnimationPlot:
 
         dataList = dataList[-50:]                           # Fix the list size so that the animation plot 'window' is x number of points
         
-        ax.clear()                                          # Clear last data frame
+        self.ax.clear()                                          # Clear last data frame
         
         self.getPlotFormat()
-        ax.plot(dataList)                                   # Plot new data frame
+        self.ax.plot(dataList)                                   # Plot new data frame
         
 
     def getPlotFormat(self):
-        ax.set_ylim([-10, 10])                              # Set Y axis limit of plot
-        ax.set_title("Arduino Data")                        # Set title of figure
-        ax.set_ylabel("Weight (lbs)")                              # Set title of y axis
+        self.ax.set_ylim([-10, 10])                              # Set Y axis limit of plot
+        self.ax.set_title("Arduino Data")                        # Set title of figure
+        self.ax.set_ylabel("Weight (lbs)")                              # Set title of y axis
+                                       
 
-dataList = []                                           # Create empty list variable for later use
-                                                        
-fig = plt.figure()                                      # Create Matplotlib plots fig is the 'higher level' plot window
-ax = fig.add_subplot(111)                               # Add subplot to main fig window
+def plotArduino(dataList, ser, root):
 
-realTimePlot = AnimationPlot()
+    fig = plt.figure()                                      # Create Matplotlib plots fig is the 'higher level' plot window
+    ax = fig.add_subplot(111)                               # Add subplot to main fig window
 
-arduino_port = "/dev/tty.usbmodem2101"
-ser = Serial(arduino_port, 9600)                          # Establish Serial object with COM port and BAUD rate to match Arduino Port/rate
-time.sleep(2)                                           # Time delay for Arduino Serial initialization 
-
-                                                        # Matplotlib Animation Fuction that takes takes care of real time plot.
+    realTimePlot = AnimationPlot(ax)
+                                                       
                                                         # Note that 'fargs' parameter is where we pass in our dataList and Serial object. 
-ani = animation.FuncAnimation(fig, realTimePlot.animate, frames=100, fargs=(dataList, ser), interval=100) 
+    ani = animation.FuncAnimation(fig, realTimePlot.animate, frames=100, fargs=(dataList, ser), interval=100) 
 
-# TODO: add red line marker on plot 
-# TODO: get time values from arduino
+    plt.show()
+    ser.close()
 
-plt.show()                                              # Keep Matplotlib plot persistent on screen until it is closed
-ser.close()  
+# TODO: add red line marker on plot (ahmad)
+# TODO: get time values from arduino (mihir)
+# TODO: show plot on GUI (mihir)
+
+# plt.show()                                              # Keep Matplotlib plot persistent on screen until it is closed
+# ser.close()  
