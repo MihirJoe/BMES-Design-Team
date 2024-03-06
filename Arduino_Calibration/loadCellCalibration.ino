@@ -56,6 +56,7 @@ void loop() {
   delay(1000);
 }
 
-# add use average of previous 5 seconds
-# share calibration to the python GUI
-# Add logic to change direction of calibration factor if going wrong way
+// TODO: integrate calibration factor
+// add use average of previous 5 seconds
+// share calibration to the python GUI
+// Add logic to change direction of calibration factor if going wrong way
