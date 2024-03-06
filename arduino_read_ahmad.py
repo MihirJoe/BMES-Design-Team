@@ -4,8 +4,9 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 class AnimationPlot:
-    def __init__(self):
+    def __init__(self, x_limit):
         self.window_size = 50  # Number of samples to show in the window
+        self.x_limit = x_limit  # X limit where the red slider will stay fixed
 
     def animate(self, i, dataList, ser):
         ser.write(b'g')                                     
@@ -19,6 +20,7 @@ class AnimationPlot:
 
         num_samples = len(dataList)
         start_index = max(0, num_samples - self.window_size)  # Start index for plotting
+        end_index = min(self.x_limit, num_samples - 1)  # End index for plotting
 
         ax.clear()                                          
         self.getPlotFormat()
@@ -26,15 +28,19 @@ class AnimationPlot:
         
         # Add red line marker for the most recent value
         if num_samples > 0:
-            ax.axvline(x=num_samples - 1, color='red', linestyle='-')
+            ax.axvline(x=end_index, color='red', linestyle='-')
+            ax.plot(end_index, dataList[end_index], 'k*')  # Black star on the actual value of y
 
         # Update x-axis limits to show the window
-        ax.set_xlim([start_index, start_index + self.window_size])
+        ax.set_xlim([start_index, self.x_limit])
+        ax.set_ylim([min(dataList), max(dataList)])  # Y-axis fits based on data range
 
     def getPlotFormat(self):
-        ax.set_ylim([-10, 10])  # Set Y axis limit of plot
         ax.set_title("Arduino Data")  # Set title of figure
         ax.set_ylabel("Weight (lbs)")  # Set title of y axis
+
+x_limit = 100  # Specify the x limit
+realTimePlot = AnimationPlot(x_limit)
 
 dataList = []                                           # Create empty list variable for later use
                                                         
