@@ -45,32 +45,39 @@ class App:
         self.top_frame = tk.Frame(self.root)
         self.top_frame.grid(row=0, column=0, sticky="ew")
 
-        
         top_frame = self.top_frame
         
         # Directory path entry
         placeholder_text = "Enter directory path"
         self.directory_path_var = tk.StringVar()
         self.directory_path_var.set(placeholder_text)
-        # self.directory_path_label = tk.Label(top_frame, text="Enter directory path:", bg="#eb6b34")
-        # self.directory_path_label.place(x=20, y=20)
-        # self.directory_path_label.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
 
         self.directory_path_entry = tk.Entry(top_frame, textvariable=self.directory_path_var)
-        # self.directory_path_entry.place(x=200, y=20)
         self.directory_path_entry.config(fg="grey")
         self.directory_path_entry.grid(row=0, column=0, padx=5, pady=5)
+
         self.browse_button = tk.Button(top_frame, text="Browse", command=self.browse_directory, bg="#eb6b34")
-        # self.browse_button.place(x=400, y=15)
         self.browse_button.grid(row=0, column=1, padx=5, pady=5)
 
         # --- Middle Section --- 
         self.middle_frame = ttk.Frame(self.root)
         self.middle_frame.grid(row=1, column=0, sticky="nsew")
         
-        self.fig, self.ax = plt.subplots(figsize=(5, 4))  # Adjust figsize as needed
-        self.plot_canvas = FigureCanvasTkAgg(self.fig, master=self.middle_frame)
-        self.plot_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        # Plotting format
+        self.fig, self.ax = plt.subplots(figsize=(5, 4))
+        self.line, = self.ax.plot([], [], lw=2)
+        self.ax.set_xlim(0, 100)
+        self.ax.set_ylim(0, 1)
+        self.ax.set_xlabel('Time (s)')
+        self.ax.set_ylabel('Force (lbs)')
+        self.ax.set_title("Force vs. Time") # TODO: add session name to plot
+
+        # self.fig, self.ax = plt.subplots(figsize=(5, 4))  # Adjust figsize as needed
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.middle_frame)
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+        self.anim = None
+        self.data = []
         
         # --- Right Section ---
         self.right_frame = tk.Frame(self.root)
@@ -88,61 +95,6 @@ class App:
         self.next_button = tk.Button(self.right_frame, text="Next", command=self.next_step, bg="#eb6b34")
         self.next_button.grid(row=3, column=0, padx=5, pady=5, sticky="ew")
 
-
-        # --- Middle Section ---
-
-        # self.fig, self.ax = plt.subplots(figsize=(3, 2))
-        # self.line, = self.ax.plot([], [], lw=2)
-        # self.ax.set_xlim(0, 100)
-        # self.ax.set_ylim(0, 1)
-        # self.ax.set_xlabel('Time')
-        # self.ax.set_ylabel('Value')
-
-        # # Middle Section: Matplotlib Plot
-        # self.middle_frame = ttk.Frame(root)
-        # self.middle_frame.grid(row=1, column=0, sticky="nsew")
-        
-        # self.fig, self.ax = plt.subplots(figsize=(5, 4))  # Adjust figsize as needed
-        # self.plot_canvas = FigureCanvasTkAgg(self.fig, master=self.middle_frame)
-        # self.plot_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-        # # --- Right Section ---
-        # self.right_frame = tk.Frame(self.root)
-        # self.middle_frame.grid(row=0, column=1)
-
-        # # Create frame for buttons
-        # self.button_frame = ttk.Frame(self.right_frame)
-        # self.button_frame.grid(row=0, column=2)
-        # # self.button_frame.pack(side=tk.RIGHT, padx=10, pady=10)
-
-        # # Start button
-        # self.start_button = tk.Button(self.button_frame, text="Start", command=self.start_process, bg="#eb6b34")
-        # # self.start_button.place(x=1145, y=280, width=195, height=83)
-        # self.start_button.grid(row=1,column=1, pady=(10,5), padx=5, sticky='ew')
-        # # Export Button
-        # self.export_button = tk.Button(self.button_frame, text="Export", command=self.export_data, bg="#eb6b34")
-        # # self.export_button.place(x=1145, y=80, width=195, height=83)
-        # self.export_button = tk.Button(self.button_frame, text="Export", bg="#eb6b34")
-        # # self.export_button.place(x=25, y=390, width=195, height=83)
-        # self.export_button.grid(row=0,column=1, pady=(10,5), padx=5, sticky='ew')
-
-        # Right Section: 4 Buttons Stacked Vertically
-        # self.right_frame = ttk.Frame(root)
-        # self.right_frame.grid(row=0, column=1, rowspan=2, sticky="ns")
-        
-        # self.button1 = ttk.Button(self.right_frame, text="Button 1")
-        # self.button1.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
-        
-        # self.button2 = ttk.Button(self.right_frame, text="Button 2")
-        # self.button2.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
-        
-        # self.button3 = ttk.Button(self.right_frame, text="Button 3")
-        # self.button3.grid(row=2, column=0, padx=5, pady=5, sticky="ew")
-        
-        # self.button4 = ttk.Button(self.right_frame, text="Button 4")
-        # self.button4.grid(row=3, column=0, padx=5, pady=5, sticky="ew")
-
-        # self.add_buttons(self.button_frame)
 
         # Configure Grid Weight to Allow Resizing
         self.root.grid_rowconfigure(1, weight=1)
@@ -172,40 +124,9 @@ class App:
         # GLabel_2["text"] = x
         # GLabel_2.place(relx=0.88, rely=0.0, anchor='se')
 
-        # Plotting interface
 
-        # self.fig, self.ax = plt.subplots(figsize=(3, 2))
-        # self.line, = self.ax.plot([], [], lw=2)
-        # self.ax.set_xlim(0, 100)
-        # self.ax.set_ylim(0, 1)
-        # self.ax.set_xlabel('Time')
-        # self.ax.set_ylabel('Value')
-
-        # self.canvas = FigureCanvasTkAgg(self.fig, master=root)
-        # self.canvas_widget = self.canvas.get_tk_widget()
-        # # self.canvas_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=1)
-        # # self.canvas_widget.pack(side=tk.LEFT, fit=tk.BOTH, expand=1)
-        # self.canvas_widget.grid(row=0, column=0, sticky="nsew")
-
-        # root.grid_rowconfigure(0, weight=1)
-        # root.grid_columnconfigure(0, weight=1)
-
-        # self.anim = None
-        # self.data = []
         # dataList, ser = getArduinoSerial("/dev/tty.usbmodem2101", 9600) # "/dev/tty.usbmodem2101", 9600
         
-        # # Create a Tkinter canvas
-        # canvas = FigureCanvasTkAgg(plotArduino(dataList, ser, root), master=root)
-        # canvas.draw()
-        
-        # # Place the canvas on the Tkinter window
-        # canvas.get_tk_widget().pack()
-
-
-        # Additional buttons
-        
-
-        # self.create_plot(root)
 
     def on_entry_click(self, event):
         """Function to handle click on the Entry widget."""
@@ -218,6 +139,30 @@ class App:
         if not self.directory_path_var.get():
             self.directory_path_entry.insert(0, "Enter directory path...")  # Restore placeholder text
             self.directory_path_entry.config(fg='grey')  # Change text color to grey
+    
+    # -- Plotting Logic --
+
+    def start_animation(self):
+        self.start_button.config(state=tk.DISABLED)  # Disable the start button
+        self.anim = FuncAnimation(self.fig, self.update_plot, interval=100)
+        self.canvas.draw()
+
+    def stop_animation(self):
+        if self.anim:
+            self.anim.event_source.stop()
+            self.start_button.config(state=tk.NORMAL)  # Enable the start button when animation stops
+            self.save_data_to_csv()
+
+    def update_plot(self, frame):
+        x = np.linspace(0, 100, 100)
+        y = np.random.rand(100)
+        self.line.set_data(x, y)
+        self.data.append((x, y))  # Store data for saving to CSV
+        return self.line,
+    
+    
+    
+    
     # def create_plot(self, root):
     #     # Create Matplotlib figure and axes with smaller size
     #     self.fig, self.ax = plt.subplots(figsize=(6, 4))  # Decrease the size here
@@ -360,7 +305,11 @@ class App:
         session_folder_path = os.path.join(self.directory_path_var.get(), session_name)
         os.makedirs(session_folder_path, exist_ok=True)
         self.session_folder_path = session_folder_path
-        self.export_csv()  # Assuming this method exists
+
+        # Start plotting animation
+        self.start_animation()
+
+        # self.export_csv()  # Assuming this method exists
 
     def export_data(self):
         x = datetime.datetime.now()
