@@ -45,5 +45,8 @@ time.sleep(2)                                           # Time delay for Arduino
                                                         # Note that 'fargs' parameter is where we pass in our dataList and Serial object. 
 ani = animation.FuncAnimation(fig, realTimePlot.animate, frames=100, fargs=(dataList, ser), interval=100) 
 
+# TODO: add red line marker on plot 
+# TODO: get time values from arduino
+
 plt.show()                                              # Keep Matplotlib plot persistent on screen until it is closed
 ser.close()  

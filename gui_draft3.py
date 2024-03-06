@@ -111,7 +111,7 @@ class App:
 
     def export_data(self):
         x = datetime.datetime.now()
-        filename = x.strftime("%x")
+        filename = x.strftime("%Y-%m-%d_%H-%M-%S")
         if not filename.endswith('.csv'):
             filename += '.csv'
         self.data_file_name = filename
