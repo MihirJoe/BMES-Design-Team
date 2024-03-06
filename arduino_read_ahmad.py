@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 class AnimationPlot:
-    ...
+    def __init__(self):
+        self.window_size = 50  # Number of samples to show in the window
 
     def animate(self, i, dataList, ser):
         ser.write(b'g')                                     
@@ -16,23 +17,24 @@ class AnimationPlot:
         except:                                            
             pass
 
-        # Use the length of dataList as the number of samples to display
         num_samples = len(dataList)
-        
+        start_index = max(0, num_samples - self.window_size)  # Start index for plotting
+
         ax.clear()                                          
         self.getPlotFormat()
-        ax.plot(range(num_samples), dataList)                                   
+        ax.plot(range(start_index, num_samples), dataList[start_index:])  # Plot from start_index to end
         
         # Add red line marker for the most recent value
         if num_samples > 0:
             ax.axvline(x=num_samples - 1, color='red', linestyle='-')
 
-        
+        # Update x-axis limits to show the window
+        ax.set_xlim([start_index, start_index + self.window_size])
 
     def getPlotFormat(self):
-        ax.set_ylim([-10, 10])                              # Set Y axis limit of plot
-        ax.set_title("Arduino Data")                        # Set title of figure
-        ax.set_ylabel("Weight (lbs)")                              # Set title of y axis
+        ax.set_ylim([-10, 10])  # Set Y axis limit of plot
+        ax.set_title("Arduino Data")  # Set title of figure
+        ax.set_ylabel("Weight (lbs)")  # Set title of y axis
 
 dataList = []                                           # Create empty list variable for later use
                                                         
@@ -47,7 +49,7 @@ time.sleep(2)                                           # Time delay for Arduino
 
                                                         # Matplotlib Animation Fuction that takes takes care of real time plot.
                                                         # Note that 'fargs' parameter is where we pass in our dataList and Serial object. 
-ani = animation.FuncAnimation(fig, realTimePlot.animate, frames=100, fargs=(dataList, ser), interval=100) 
+ani = animation.FuncAnimation(fig, realTimePlot.animate, fargs=(dataList, ser), interval=100) 
 
 # TODO: add red line marker on plot 
 # TODO: get time values from arduino
