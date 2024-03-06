@@ -38,7 +38,7 @@
 
 HX711 scale;
 
-float calibration_factor = -6050; //-7050 worked for my 440lb max scale setup
+float calibration_factor = -6500; //-7050 worked for my 440lb max scale setup
 char userInput;
 
 void setup() {
