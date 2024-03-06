@@ -28,7 +28,7 @@ class AnimationPlot:
     def getPlotFormat(self):
         ax.set_ylim([-10, 10])                              # Set Y axis limit of plot
         ax.set_title("Arduino Data")                        # Set title of figure
-        ax.set_ylabel("Value")                              # Set title of y axis
+        ax.set_ylabel("Weight (lbs)")                              # Set title of y axis
 
 dataList = []                                           # Create empty list variable for later use
                                                         

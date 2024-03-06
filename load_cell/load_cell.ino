@@ -60,10 +60,8 @@ void setup() {
 }
 
 void loop() {
-  
-  // Serial.println("Ahmad is gay");
 
-  if(Serial.available())
+  if(Serial.available()>0)
   {
     
     userInput = Serial.read();
@@ -76,7 +74,7 @@ void loop() {
       // Serial.print(" calibration_factor: ");
       // Serial.print(calibration_factor);
       // Serial.println();
-      delay(1000);
+      // delay(1000);
     }
     
 
