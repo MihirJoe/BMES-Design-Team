@@ -64,13 +64,18 @@ class App:
         self.middle_frame.grid(row=1, column=0, sticky="nsew")
         
         # Plotting format
+
+        self.x_axis_label = "Time (s)"
+        self.y_axis_label = "Force (lbs)"
+
         self.fig, self.ax = plt.subplots(figsize=(5, 4))
         self.line, = self.ax.plot([], [], lw=2)
         self.ax.set_xlim(0, 100)
         self.ax.set_ylim(0, 1)
-        self.ax.set_xlabel('Time (s)')
-        self.ax.set_ylabel('Force (lbs)')
-        self.ax.set_title("Force vs. Time") # TODO: add session name to plot
+        self.ax.set_xlabel(self.x_axis_label)
+        self.ax.set_ylabel(self.y_axis_label)
+        # self.ax.set_title(self.session_folder_path) # TODO: set title to data file name
+
 
         # self.fig, self.ax = plt.subplots(figsize=(5, 4))  # Adjust figsize as needed
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.middle_frame)
@@ -160,134 +165,6 @@ class App:
         self.data.append((x, y))  # Store data for saving to CSV
         return self.line,
     
-    
-    
-    
-    # def create_plot(self, root):
-    #     # Create Matplotlib figure and axes with smaller size
-    #     self.fig, self.ax = plt.subplots(figsize=(6, 4))  # Decrease the size here
-    #     self.ax.set_title("Animated Plot")
-    #     self.ax.set_xlabel("X-axis")
-    #     self.ax.set_ylabel("Y-axis")
-
-    #     # Create initial empty plot
-    #     self.line, = self.ax.plot([], [])
-
-    #     # Embed the Matplotlib plot into Tkinter GUI
-    #     self.canvas = FigureCanvasTkAgg(self.fig, master=root)
-    #     self.canvas.draw()
-    #     self.canvas.get_tk_widget().place(x=0, y=0)
-
-    #     # Start the animation
-    #     self.start_animation()
-
-    # # def update_plot(self, frame):
-    # #     # Function to update the plot with random data
-    # #     x = range(frame)
-    # #     y = [random.randint(0, 100) for _ in x]
-    # #     self.line.set_data(x, y)
-    # #     realTimePlot = AnimationPlot(self.ax)
-    # #     # Set plot limits to ensure all data points are visible
-    # #     self.line.axes.set_xlim(0, max(x))
-    # #     self.line.axes.set_ylim(0, max(y))
-
-    # #     return self.line,
-
-    
-
-    # def start_animation(self):
-    #     # Function to start the animation
-    #     def animate(self, dataList, ser):
-    #         ser.write(b'g')                                     # Transmit the char 'g' to receive the Arduino data point
-    #         arduinoData_string = ser.readline().decode('ascii') # Decode receive Arduino data as a formatted string
-    #         #print(i)                                           # 'i' is a incrementing variable based upon frames = x argument
-
-    #         try:
-    #             arduinoData_float = float(arduinoData_string)   # Convert to float
-    #             dataList.append(arduinoData_float)              # Add to the list holding the fixed number of points to animate
-
-    #         except:                                             # Pass if data point is bad                               
-    #             pass
-
-    #         dataList = dataList[-50:]                           # Fix the list size so that the animation plot 'window' is x number of points
-            
-    #         # self.ax.clear()                                          # Clear last data frame
-            
-    #         # self.getPlotFormat()
-    #         # self.ax.plot(dataList) 
-        
-
-    #     # Create FuncAnimation for animated plot
-    #     dataList, ser = getArduinoSerial("/dev/tty.usbmodem2101", 9600)
-        
-    #     self.ani = animation.FuncAnimation(self.fig, animate(dataList, ser), frames=100, interval=100, blit=True) 
-
-    #     # Call the function to periodically update the plot
-    #     self.update_plot_gui()
-
-    # def update_plot_gui(self):
-    #     # Function to update the plot within Tkinter GUI
-    #     self.canvas.draw()
-
-    #     # Schedule the next update after 100 milliseconds
-    #     self.canvas._tkcanvas.after(100, self.update_plot_gui)
-
-
-
-    # def embed_plot(self, root):
-    #     # Create Matplotlib figure and axes
-    #     fig, ax = plt.subplots(figsize=(6, 4))
-    #     ax.set_title("Animated Plot")
-    #     ax.set_xlabel("X-axis")
-    #     ax.set_ylabel("Y-axis")
-
-    #     dataList, ser = getArduinoSerial("/dev/tty.usbmodem2101", 9600) # "/dev/tty.usbmodem2101", 9600
-    #     realTimePlot = AnimationPlot(ax)
-    #     # Create FuncAnimation for animated plot
-    #     ani = animation.FuncAnimation(fig, realTimePlot.animate, frames=100, fargs=(dataList, ser), interval=100) 
-
-    #     # Embed the Matplotlib plot into Tkinter GUI
-    #     canvas = FigureCanvasTkAgg(fig, master=root)
-    #     canvas.draw()
-    #     canvas.get_tk_widget().place(x=0, y=0)
-
-    #     self.start_animation(root, ani)
-
-
-    def start_animation(self):
-        self.start_button.config(state=tk.DISABLED)  # Disable the start button
-        self.anim = FuncAnimation(self.fig, self.update_plot, interval=100)
-        self.canvas.draw()
-
-    def stop_animation(self):
-        if self.anim:
-            self.anim.event_source.stop()
-            self.start_button.config(state=tk.NORMAL)  # Enable the start button when animation stops
-            #self.save_data_to_csv()
-
-    def update_plot(self, frame):
-        x = np.linspace(0, 100, 100)
-        y = np.random.rand(100)
-        self.line.set_data(x, y)
-        self.data.append((x, y))  # Store data for saving to CSV
-        return self.line,
-    
-
-    def add_buttons(self, root):
-        # Export button
-
-        # Calibrate button
-        calibrate_button = tk.Button(root, text="Calibrate", command=self.calibrate, bg="#eb6b34")
-        calibrate_button.place(x=1145, y=180, width=195, height=83)
-
-        # Stop button
-        stop_button = tk.Button(root, text="Stop", command=self.stop_process, bg="#eb6b34")
-        stop_button.place(x=1145, y=480, width=195, height=83)
-
-        # Next button
-        next_button = tk.Button(root, text="Next", command=self.next_step, bg="#eb6b34")
-        next_button.place(x=1145, y=380, width=195, height=83)
-
     def browse_directory(self):
         directory_path = filedialog.askdirectory()
         self.directory_path_var.set(directory_path)
@@ -319,25 +196,44 @@ class App:
         self.data_file_name = filename
         self.export_csv()
         # Update the label with the exported file name
-        self.exported_file_label.config(text=self.data_file_name)
+        # self.exported_file_label.config(text=self.data_file_name)
+
+    def save_data_to_csv(self):
+        if self.data:
+            with open('live_plot_data.csv', 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(['Time', 'Force'])
+                for x, y in self.data:
+                    for i in range(len(x)):
+                        writer.writerow([x[i], y[i]])
 
     def calibrate(self):
-        # Implement calibrate functionality here
+        
+        # TODO: implement calibration logic manually or automatically
+
         pass
 
     def stop_process(self):
-        # Implement stop process functionality here
-        pass
+
+        # Stop recording
+        self.stop_animation()
 
     def next_step(self):
         # Implement next step functionality here
+
+        # TODO: save time and force columns to same CSV for "n" sessions
+        # for this, we should append all the data to a dataframe and then 
         pass
 
     def export_csv(self):
         file_path = os.path.join(self.session_folder_path, self.data_file_name)
         with open(file_path, "w", newline="") as data_file:
             csv_writer = csv.writer(data_file)
-            csv_writer.writerow(["Timestamp", "293293"])
+            csv_writer.writerow([self.x_axis_label, self.y_axis_label])
+            for x, y in self.data:
+                for i in range(len(x)):
+                    csv_writer.writerow([x[i], y[i]])
+
         messagebox.showinfo("Export", f"CSV file exported successfully as {self.data_file_name}")
 
  
@@ -349,3 +245,17 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = App(root)
     root.mainloop()
+
+
+
+# TODO:
+    
+    # 1. play/pause
+    # 2. gray out all buttons at start
+    # 3. change text field to directory label
+    # 4. change plot title to session name
+    # 5. implement next session logic
+    # 6. format CSV to have session name as header
+    # 7. Get arduino timestamp
+    # 8. Arduino in real-time formatted plot & data export
+    # 9. Update UI layout
