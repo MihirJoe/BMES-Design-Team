@@ -31,6 +31,9 @@ class App:
         self.root.title("Data Visualizer")
         mainWinBgColor = "#eb6b34"
         self.root.configure(bg=mainWinBgColor)
+
+        self.is_reading = False
+
         #setting window size
         # width=956
         # height=644
@@ -45,13 +48,15 @@ class App:
         # Establish Serial Connection
 
         try:
-            self.ser = serial.Serial(self.port, self.baud, timeout=2)
+            self.ser = serial.Serial(self.port, self.baud)
             print("Serial connection established.")
         except Exception as e:
             print("Failed to establish serial connection:", e)
             return
-
+        
         time.sleep(2)
+
+        
 
         # Set the font size to 12
         style = Style()
@@ -85,11 +90,12 @@ class App:
 
         self.x_axis_label = "Time (s)"
         self.y_axis_label = "Force (lbs)"
+        self.y_scale = 20
 
         self.fig, self.ax = plt.subplots(figsize=(5, 4))
         self.line, = self.ax.plot([], [], lw=2)
         self.ax.set_xlim(0, 100)
-        self.ax.set_ylim(0, 1)
+        self.ax.set_ylim(-self.y_scale, self.y_scale)
         self.ax.set_xlabel(self.x_axis_label)
         self.ax.set_ylabel(self.y_axis_label)
         # self.ax.set_title(self.session_folder_path) # TODO: set title to data file name
@@ -99,17 +105,6 @@ class App:
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.middle_frame)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        # self.fig = Figure(figsize=(5, 4))
-        # self.ax = self.fig.add_subplot(111)
-        # self.ax.set_xlabel(self.x_axis_label)
-        # self.ax.set_ylabel(self.y_axis_label)
-        # self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
-        # self.canvas_widget = self.canvas.get_tk_widget()
-        # self.canvas_widget.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        # self.anim = None
-        # self.data = []
-        
         # --- Right Section ---
         self.right_frame = tk.Frame(self.root)
         self.right_frame.grid(row=0, column=1, rowspan=2, sticky="ns")
@@ -123,8 +118,8 @@ class App:
         self.stop_button = tk.Button(self.right_frame, text="Stop", command=self.stop_process, bg="#eb6b34")
         self.stop_button.grid(row=2, column=0, padx=5, pady=5, sticky="ew")
         
-        self.next_button = tk.Button(self.right_frame, text="Next", command=self.next_step, bg="#eb6b34")
-        self.next_button.grid(row=3, column=0, padx=5, pady=5, sticky="ew")
+        # self.next_button = tk.Button(self.right_frame, text="Next", command=self.next_step, bg="#eb6b34")
+        # self.next_button.grid(row=3, column=0, padx=5, pady=5, sticky="ew")
 
 
         # Configure Grid Weight to Allow Resizing
@@ -165,8 +160,10 @@ class App:
                 self.dataList.append(float(data))
                 self.ax.clear()
                 self.ax.plot(self.time_list, self.dataList)
+                self.ax.set_ylim(-self.y_scale, self.y_scale)  # Update y-axis limits
                 self.canvas.draw()
-            self.root.after(100, self.update_plot)  # Schedule the update every 100 milliseconds
+            if self.is_reading:
+                self.root.after(100, self.update_plot)  # Schedule the update every 100 milliseconds
         except Exception as e:
             print("Error reading data:", e)
             # Handle serial communication error gracefully
@@ -209,6 +206,7 @@ class App:
         self.session_folder_path = session_folder_path
 
         # Start plotting animation
+        self.is_reading = True
         self.update_plot()
 
         # self.export_csv()  # Assuming this method exists
@@ -219,18 +217,21 @@ class App:
         if not filename.endswith('.csv'):
             filename += '.csv'
         self.data_file_name = filename
+        self.is_reading = False
+        
+        # Export data to CSV
         self.export_csv()
         # Update the label with the exported file name
         # self.exported_file_label.config(text=self.data_file_name)
 
-    def save_data_to_csv(self):
-        if self.data:
-            with open('live_plot_data.csv', 'w', newline='') as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow(['Time', 'Force'])
-                for x, y in self.data:
-                    for i in range(len(x)):
-                        writer.writerow([x[i], y[i]])
+    # def save_data_to_csv(self):
+    #     if self.time_list and self.dataList:
+    #         with open('live_plot_data.csv', 'w', newline='') as csvfile:
+    #             writer = csv.writer(csvfile)
+    #             writer.writerow([self.x_axis_label, self.y_axis_label])
+    #             for x, y in zip(self.time_list, self.dataList):
+    #                 for i in range(len(x)):
+    #                     writer.writerow([x[i], y[i]])
 
     def calibrate(self):
         
@@ -241,7 +242,7 @@ class App:
     def stop_process(self):
 
         # Stop recording
-        self.stop_animation()
+        self.is_reading = False
 
     def next_step(self):
         # Implement next step functionality here
@@ -255,9 +256,12 @@ class App:
         with open(file_path, "w", newline="") as data_file:
             csv_writer = csv.writer(data_file)
             csv_writer.writerow([self.x_axis_label, self.y_axis_label])
-            for x, y in self.data:
-                for i in range(len(x)):
-                    csv_writer.writerow([x[i], y[i]])
+            self.time_list = [x - self.time_list[0] for x in self.time_list] # normalize time values
+            
+            for x, y in zip(self.time_list, self.dataList):
+                csv_writer.writerow([x, y])
+                # for i in range(len(self.time_list)):
+                    
 
         messagebox.showinfo("Export", f"CSV file exported successfully as {self.data_file_name}")
 

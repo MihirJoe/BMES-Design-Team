@@ -42,6 +42,7 @@ class ArduinoPlotter:
                 self.dataList.append(float(data))
                 self.ax.clear()
                 self.ax.plot(self.time_list, self.dataList)
+                self.ax.set_ylim(-50, 50)  # Update y-axis limits
                 self.canvas.draw()
             self.master.after(100, self.update_plot)  # Schedule the update every 100 milliseconds
         except Exception as e:
