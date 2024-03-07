@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.animation import FuncAnimation
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_pdf import PdfPages
 # from arduino_read import *
 import random
 import numpy as np
@@ -91,8 +92,10 @@ class App:
         self.x_axis_label = "Time (s)"
         self.y_axis_label = "Force (lbs)"
         self.y_scale = 20
+        self.fig_width = 5
+        self.fig_height = 4
 
-        self.fig, self.ax = plt.subplots(figsize=(5, 4))
+        self.fig, self.ax = plt.subplots(figsize=(self.fig_width, self.fig_height))
         self.line, = self.ax.plot([], [], lw=2)
         self.ax.set_xlim(0, 100)
         self.ax.set_ylim(-self.y_scale, self.y_scale)
@@ -156,7 +159,10 @@ class App:
             data = self.ser.readline().decode('utf-8').strip()
             print("Received data:", data)  # Add this line for debugging
             if data:
-                self.time_list.append(time.time())
+                if len(self.time_list) == 0:
+                    self.time_first = time.time() # save first timestamp
+                self.time_list.append(time.time() - self.time_first)
+                # self.time_list = [x - self.time_list[0] for x in self.time_list] # normalize time values
                 self.dataList.append(float(data))
                 self.ax.clear()
                 self.ax.plot(self.time_list, self.dataList)
@@ -214,13 +220,18 @@ class App:
     def export_data(self):
         x = datetime.datetime.now()
         filename = x.strftime("%Y-%m-%d_%H-%M-%S")
-        if not filename.endswith('.csv'):
-            filename += '.csv'
-        self.data_file_name = filename
+        self.csv_filename = filename + '.csv'
+        self.pdf_filename = filename + '.pdf'
+        # if not filename.endswith('.csv'):
+        #     filename += '.csv'
+        # self.data_file_name = filename
         self.is_reading = False
         
-        # Export data to CSV
+        # Export data to CSV & PDF
         self.export_csv()
+        self.export_pdf()
+
+        messagebox.showinfo("Export", f"CSV & PDF files exported successfully in {self.session_folder_path}")
         # Update the label with the exported file name
         # self.exported_file_label.config(text=self.data_file_name)
 
@@ -252,18 +263,32 @@ class App:
         pass
 
     def export_csv(self):
-        file_path = os.path.join(self.session_folder_path, self.data_file_name)
+        file_path = os.path.join(self.session_folder_path, self.csv_filename)
         with open(file_path, "w", newline="") as data_file:
             csv_writer = csv.writer(data_file)
             csv_writer.writerow([self.x_axis_label, self.y_axis_label])
-            self.time_list = [x - self.time_list[0] for x in self.time_list] # normalize time values
             
+
             for x, y in zip(self.time_list, self.dataList):
                 csv_writer.writerow([x, y])
                 # for i in range(len(self.time_list)):
                     
 
-        messagebox.showinfo("Export", f"CSV file exported successfully as {self.data_file_name}")
+    def export_pdf(self):
+
+        # Plot figure
+
+        self.fig, self.ax = plt.subplots(figsize=(self.fig_width, self.fig_height))
+        self.line, = self.ax.plot(self.time_list, self.dataList, lw=2)
+        self.ax.set_xlim(min(self.time_list), max(self.time_list))
+        self.ax.set_ylim(min(self.dataList), max(self.dataList))
+        self.ax.set_xlabel(self.x_axis_label)
+        self.ax.set_ylabel(self.y_axis_label)
+
+        plt.tight_layout()
+        file_path = os.path.join(self.session_folder_path, self.pdf_filename)
+        with PdfPages(file_path) as pdf:
+            pdf.savefig()
 
  
 def main():

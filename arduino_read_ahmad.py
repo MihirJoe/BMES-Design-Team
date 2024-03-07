@@ -2,6 +2,7 @@ import time
 from serial import Serial
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from matplotlib.backends.backend_pdf import PdfPages
 
 class AnimationPlot:
     def __init__(self, x_limit):
