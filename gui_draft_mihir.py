@@ -91,14 +91,14 @@ class App:
 
         self.x_axis_label = "Time (s)"
         self.y_axis_label = "Force (lbs)"
-        self.y_scale = 20
+        self.y_scale = 10
         self.fig_width = 5
         self.fig_height = 4
 
         self.fig, self.ax = plt.subplots(figsize=(self.fig_width, self.fig_height))
         self.line, = self.ax.plot([], [], lw=2)
         self.ax.set_xlim(0, 100)
-        self.ax.set_ylim(-self.y_scale, self.y_scale)
+        self.ax.set_ylim(-2, self.y_scale + 5)
         self.ax.set_xlabel(self.x_axis_label)
         self.ax.set_ylabel(self.y_axis_label)
         # self.ax.set_title(self.session_folder_path) # TODO: set title to data file name
@@ -166,7 +166,7 @@ class App:
                 self.dataList.append(float(data))
                 self.ax.clear()
                 self.ax.plot(self.time_list, self.dataList)
-                self.ax.set_ylim(-self.y_scale, self.y_scale)  # Update y-axis limits
+                self.ax.set_ylim(-2, self.y_scale + 5)  # Update y-axis limits
                 self.canvas.draw()
             if self.is_reading:
                 self.root.after(100, self.update_plot)  # Schedule the update every 100 milliseconds
@@ -294,7 +294,7 @@ class App:
 def main():
     root = tk.Tk()
     root.title("Real-Time Arduino Data Plot")
-    port = "/dev/tty.usbmodem2101"  # Update with your port
+    port = "/dev/tty.usbmodem101" #"/dev/tty.usbmodem2101"  # Update with your port
     baud = 9600  # Update with your baud rate
     arduino_plotter = App(root, port, baud)
     root.mainloop()
