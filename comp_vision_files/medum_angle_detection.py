@@ -39,6 +39,7 @@ while True:
    for cnt in contours:
       area = cv2.contourArea(cnt)
       approx = cv2.approxPolyDP(cnt, 0.02*cv2.arcLength(cnt, True),True)
+      print(type(approx))
       # Coordinate
       x = approx.ravel()[0]
       y = approx.ravel()[1]
