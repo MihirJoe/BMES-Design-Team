@@ -27,7 +27,9 @@ class App:
         self.port = port
         self.baud = baud
         self.time_list = []
-        self.dataList = []
+        self.timestamp_label = "Timestamp"
+        self.angle_data = []
+        self.force_data = []
         self.root = root
         self.root.title("Data Visualizer")
         mainWinBgColor = "#eb6b34"
@@ -49,11 +51,21 @@ class App:
         # Establish Serial Connection
 
         try:
-            self.ser = serial.Serial(self.port, self.baud)
+            self.ser = serial.Serial(self.port, self.baud, timeout=2)
             print("Serial connection established.")
+            print("Calibrating sensors...")
+            time.sleep(4)
+            calibration_message = self.ser.readline().decode('utf-8')
+            # print(calibration_message)
+            if calibration_message == "a":
+                print("Sensors Calibrated!")
+            else:
+                print("a not received")
         except Exception as e:
             print("Failed to establish serial connection:", e)
             return
+        
+        time.sleep(2)
         
         time.sleep(2)
 
@@ -89,7 +101,7 @@ class App:
         
         # Plotting format
 
-        self.x_axis_label = "Time (s)"
+        self.x_axis_label = "Angle (deg)"
         self.y_axis_label = "Force (lbs)"
         self.y_scale = 10
         self.fig_width = 5
@@ -129,43 +141,24 @@ class App:
         self.root.grid_rowconfigure(1, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
 
-        
-
-        
-
-        # GLabel_237=tk.Label(root)
-        # GLabel_237["bg"] = "#eb6b34"
-        # ft = tkFont.Font(family='Times',size=14)
-        # GLabel_237["font"] = ft
-        # GLabel_237["fg"] = "#000000"
-        # GLabel_237["justify"] = "center"
-        # GLabel_237["text"] = self.start_process
-        # GLabel_237.place(relx=0.99, rely=1.0, anchor='se')
-
-
-        # GLabel_2=tk.Label(root)
-        # GLabel_2["bg"] = "#eb6b34"
-        # ft = tkFont.Font(family='Times',size=14)
-        # GLabel_2["font"] = ft
-        # GLabel_2["fg"] = "#000000"
-        # GLabel_2["justify"] = "center"
-        # x = "hello world."
-        # GLabel_2["text"] = x
-        # GLabel_2.place(relx=0.88, rely=0.0, anchor='se')
 
     def update_plot(self):
         try:
             self.ser.write(b'g') # write to Arduino
             data = self.ser.readline().decode('utf-8').strip()
-            print("Received data:", data)  # Add this line for debugging
+
+            angle, force = map(float, data.split(','))
+
+            print("Received angle:", angle)  # Add this line for debugging
+            print("Received force:", force)  # Add this line for debugging
             if data:
-                if len(self.time_list) == 0:
-                    self.time_first = time.time() # save first timestamp
-                self.time_list.append(time.time() - self.time_first)
-                # self.time_list = [x - self.time_list[0] for x in self.time_list] # normalize time values
-                self.dataList.append(float(data))
+                # if len(self.time_list) == 0:
+                #     self.time_first = time.time() # save first timestamp
+                self.time_list.append(time.time())
+                self.angle_data.append(angle)
+                self.force_data.append(force)
                 self.ax.clear()
-                self.ax.plot(self.time_list, self.dataList)
+                self.ax.plot(self.angle_data, self.force_data)
                 self.ax.set_ylim(-2, self.y_scale + 5)  # Update y-axis limits
                 self.canvas.draw()
             if self.is_reading:
@@ -232,17 +225,6 @@ class App:
         self.export_pdf()
 
         messagebox.showinfo("Export", f"CSV & PDF files exported successfully in {self.session_folder_path}")
-        # Update the label with the exported file name
-        # self.exported_file_label.config(text=self.data_file_name)
-
-    # def save_data_to_csv(self):
-    #     if self.time_list and self.dataList:
-    #         with open('live_plot_data.csv', 'w', newline='') as csvfile:
-    #             writer = csv.writer(csvfile)
-    #             writer.writerow([self.x_axis_label, self.y_axis_label])
-    #             for x, y in zip(self.time_list, self.dataList):
-    #                 for i in range(len(x)):
-    #                     writer.writerow([x[i], y[i]])
 
     def calibrate(self):
         
@@ -266,11 +248,11 @@ class App:
         file_path = os.path.join(self.session_folder_path, self.csv_filename)
         with open(file_path, "w", newline="") as data_file:
             csv_writer = csv.writer(data_file)
-            csv_writer.writerow([self.x_axis_label, self.y_axis_label])
+            csv_writer.writerow([self.timestamp_label, self.x_axis_label, self.y_axis_label])
             
 
-            for x, y in zip(self.time_list, self.dataList):
-                csv_writer.writerow([x, y])
+            for t, x, y in zip(self.time_list, self.angle_data, self.force_data):
+                csv_writer.writerow([t, x, y])
                 # for i in range(len(self.time_list)):
                     
 
@@ -279,9 +261,9 @@ class App:
         # Plot figure
 
         self.fig, self.ax = plt.subplots(figsize=(self.fig_width, self.fig_height))
-        self.line, = self.ax.plot(self.time_list, self.dataList, lw=2)
-        self.ax.set_xlim(min(self.time_list), max(self.time_list))
-        self.ax.set_ylim(min(self.dataList), max(self.dataList))
+        self.line, = self.ax.plot(self.angle_data, self.force_data, lw=2)
+        self.ax.set_xlim(min(self.angle_data), max(self.force_data))
+        self.ax.set_ylim(min(self.angle_data), max(self.force_data))
         self.ax.set_xlabel(self.x_axis_label)
         self.ax.set_ylabel(self.y_axis_label)
 
