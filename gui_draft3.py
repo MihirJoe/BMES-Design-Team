@@ -13,7 +13,7 @@ import os
 from matplotlib.figure import Figure
 from matplotlib.animation import FuncAnimation
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from arduino_read import *
+from arduino_read_new import *
 import random
 import numpy as np
 

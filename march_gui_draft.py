@@ -20,7 +20,6 @@ import random
 import numpy as np
 import serial
 import time
-import threading
 
 class App:
     def __init__(self, root, port, baud):
@@ -28,16 +27,13 @@ class App:
         self.port = port
         self.baud = baud
         self.time_list = []
-        self.timestamp_label = "Timestamp"
-        self.angle_data = []
-        self.force_data = []
+        self.dataList = []
         self.root = root
         self.root.title("Data Visualizer")
         mainWinBgColor = "#eb6b34"
         self.root.configure(bg=mainWinBgColor)
 
         self.is_reading = False
-        self.lock = threading.Lock()
 
         #setting window size
         # width=956
@@ -58,7 +54,7 @@ class App:
             print("Calibrating sensors...")
             time.sleep(4)
             calibration_message = self.ser.readline().decode('utf-8')
-            # print(calibration_message)
+            print(calibration_message)
             if calibration_message == "a":
                 print("Sensors Calibrated!")
             else:
@@ -69,7 +65,6 @@ class App:
         
         time.sleep(2)
         
-        time.sleep(2)
 
         
 
@@ -103,17 +98,16 @@ class App:
         
         # Plotting format
 
-        self.x_axis_label = "Angle (deg)"
+        self.x_axis_label = "Time (s)"
         self.y_axis_label = "Force (lbs)"
         self.y_scale = 10
         self.fig_width = 5
         self.fig_height = 4
 
         self.fig, self.ax = plt.subplots(figsize=(self.fig_width, self.fig_height))
-        # self.line, = self.ax.plot([], [], lw=2)
-        self.ax.scatter([], [])
+        self.line, = self.ax.plot([], [], lw=2)
         self.ax.set_xlim(0, 100)
-        self.ax.set_ylim(-2, self.y_scale + 5) # TODO: dynamically adjust ylim
+        self.ax.set_ylim(-2, self.y_scale + 5)
         self.ax.set_xlabel(self.x_axis_label)
         self.ax.set_ylabel(self.y_axis_label)
         # self.ax.set_title(self.session_folder_path) # TODO: set title to data file name
@@ -135,77 +129,35 @@ class App:
         
         self.stop_button = tk.Button(self.right_frame, text="Stop", command=self.stop_process, bg="#eb6b34")
         self.stop_button.grid(row=2, column=0, padx=5, pady=5, sticky="ew")
-        
-        # self.next_button = tk.Button(self.right_frame, text="Next", command=self.next_step, bg="#eb6b34")
-        # self.next_button.grid(row=3, column=0, padx=5, pady=5, sticky="ew")
 
 
         # Configure Grid Weight to Allow Resizing
         self.root.grid_rowconfigure(1, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
 
-    def read_serial(self):
-        while self.is_reading:
-            try: 
-                self.ser.write(b'g') # write to Arduino
-                data = self.ser.readline().decode('utf-8').strip()
-
-                angle, force = map(float, data.split(','))
-
-                print("Received angle:", angle)  # Add this line for debugging
-                print("Received force:", force)  # Add this line for debugging
-
-                with self.lock:
-                        self.time_list.append(time.time())
-                        self.angle_data.append(angle)
-                        self.force_data.append(force)
-                time.sleep(0.1)
-
-            except Exception as e:
-                print("Error reading data:", e)
-                self.is_reading = False
-                self.ser.close()
-
-        
 
     def update_plot(self):
-
-        with self.lock:
-            if self.angle_data and self.force_data:
+        try:
+            self.ser.write(b'g') # write to Arduino
+            data = self.ser.readline().decode('utf-8').strip()
+            print("Received data:", data)  # Add this line for debugging
+            if data:
+                if len(self.time_list) == 0:
+                    self.time_first = time.time() # save first timestamp
+                self.time_list.append(time.time() - self.time_first)
+                # self.time_list = [x - self.time_list[0] for x in self.time_list] # normalize time values
+                self.dataList.append(float(data))
                 self.ax.clear()
-                self.ax.scatter(self.angle_data, self.force_data)
-                self.ax.set_ylim(-2, self.y_scale + 5)
-                self.ax.set_xlabel(self.x_axis_label)
-                self.ax.set_ylabel(self.y_axis_label)
+                self.ax.plot(self.time_list, self.dataList)
+                self.ax.set_ylim(-2, self.y_scale + 5)  # Update y-axis limits
                 self.canvas.draw()
-        if self.is_reading:
-            self.root.after(100, self.update_plot)
-
-        # try:
-        #     self.ser.write(b'g') # write to Arduino
-        #     data = self.ser.readline().decode('utf-8').strip()
-
-        #     angle, force = map(float, data.split(','))
-
-        #     print("Received angle:", angle)  # Add this line for debugging
-        #     print("Received force:", force)  # Add this line for debugging
-        #     if data:
-        #         # if len(self.time_list) == 0:
-        #         #     self.time_first = time.time() # save first timestamp
-        #         self.time_list.append(time.time())
-        #         self.angle_data.append(angle)
-        #         self.force_data.append(force)
-        #         self.ax.clear()
-        #         self.ax.scatter(self.angle_data, self.force_data)
-        #         self.ax.set_ylim(-2, self.y_scale + 5)  # Update y-axis limits
-        #         self.canvas.draw()
-        #     if self.is_reading:
-        #         self.root.after(100, self.update_plot)  # Schedule the update every 100 milliseconds
-        # except Exception as e:
-        #     print("Error reading data:", e)
-        #     # Handle serial communication error gracefully
-        #     self.ser.close()  # Close the serial connection
-        #     return
+            if self.is_reading:
+                self.root.after(100, self.update_plot)  # Schedule the update every 100 milliseconds
+        except Exception as e:
+            print("Error reading data:", e)
+            # Handle serial communication error gracefully
+            self.ser.close()  # Close the serial connection
+            return
 
 
     def on_entry_click(self, event):
@@ -221,9 +173,6 @@ class App:
             self.directory_path_entry.config(fg='grey')  # Change text color to grey
     
     # -- Plotting Logic --
-
-    
-    
     def browse_directory(self):
         directory_path = filedialog.askdirectory()
         self.directory_path_var.set(directory_path)
@@ -244,8 +193,6 @@ class App:
 
         # Start plotting animation
         self.is_reading = True
-        self.serial_thread = threading.Thread(target=self.read_serial)
-        self.serial_thread.start()
         self.update_plot()
 
         # self.export_csv()  # Assuming this method exists
@@ -259,19 +206,23 @@ class App:
         #     filename += '.csv'
         # self.data_file_name = filename
         self.is_reading = False
-        # self.serial_thread.join()
         
         # Export data to CSV & PDF
         self.export_csv()
         self.export_pdf()
 
         messagebox.showinfo("Export", f"CSV & PDF files exported successfully in {self.session_folder_path}")
+       
+    def calibrate(self):
+        
+        # TODO: implement calibration logic manually or automatically
+
+        pass
 
     def stop_process(self):
 
         # Stop recording
         self.is_reading = False
-        self.serial_thread.join()
 
     def next_step(self):
         # Implement next step functionality here
@@ -284,10 +235,11 @@ class App:
         file_path = os.path.join(self.session_folder_path, self.csv_filename)
         with open(file_path, "w", newline="") as data_file:
             csv_writer = csv.writer(data_file)
-            csv_writer.writerow([self.timestamp_label, self.x_axis_label, self.y_axis_label])
+            csv_writer.writerow([self.x_axis_label, self.y_axis_label])
             
-            for t, x, y in zip(self.time_list, self.angle_data, self.force_data):
-                csv_writer.writerow([t, x, y])
+
+            for x, y in zip(self.time_list, self.dataList):
+                csv_writer.writerow([x, y])
                 # for i in range(len(self.time_list)):
                     
 
@@ -296,10 +248,9 @@ class App:
         # Plot figure
 
         self.fig, self.ax = plt.subplots(figsize=(self.fig_width, self.fig_height))
-        # self.line, = self.ax.scatter(self.angle_data, self.force_data, lw=2)
-        self.ax.scatter(self.angle_data, self.force_data)
-        self.ax.set_xlim(min(self.angle_data), max(self.force_data))
-        self.ax.set_ylim(min(self.angle_data), max(self.force_data))
+        self.line, = self.ax.plot(self.time_list, self.dataList, lw=2)
+        self.ax.set_xlim(min(self.time_list), max(self.time_list))
+        self.ax.set_ylim(min(self.dataList), max(self.dataList))
         self.ax.set_xlabel(self.x_axis_label)
         self.ax.set_ylabel(self.y_axis_label)
 

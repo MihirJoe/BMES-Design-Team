@@ -10,6 +10,8 @@ class AnimationPlot:
 
     def __init__(self, ax):
         self.ax = ax
+        self.x_data = []
+        self.y_data = []
 
     def animate(self, i, dataList, ser):
         ser.write(b'g')                                     # Transmit the char 'g' to receive the Arduino data point
@@ -17,8 +19,14 @@ class AnimationPlot:
         #print(i)                                           # 'i' is a incrementing variable based upon frames = x argument
 
         try:
-            arduinoData_float = float(arduinoData_string)   # Convert to float
-            dataList.append(arduinoData_float)              # Add to the list holding the fixed number of points to animate
+            # arduinoData_float = float(arduinoData_string)   # Convert to float
+            # dataList.append(arduinoData_float)              # Add to the list holding the fixed number of points to animate
+            angle, force = map(float, arduinoData_string.split(','))  # Parse the comma-separated floats
+            print(f"angle: {angle}")
+            print(f"force: {force}")
+            print("")
+            self.x_data.append(angle)
+            self.y_data.append(force)
 
         except:                                             # Pass if data point is bad                               
             pass
@@ -28,7 +36,7 @@ class AnimationPlot:
         self.ax.clear()                                          # Clear last data frame
         
         self.getPlotFormat()
-        self.ax.plot(dataList)                                   # Plot new data frame
+        self.ax.plot(self.x_data, self.y_data)                                   # Plot new data frame
         
 
     def getPlotFormat(self):
@@ -49,6 +57,8 @@ def plotArduino(dataList, ser, root):
 
     plt.show()
     ser.close()
+
+
 
 # TODO: add red line marker on plot (ahmad)
 # TODO: get time values from arduino (mihir)
