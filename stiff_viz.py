@@ -31,6 +31,8 @@ class App:
         self.timestamp_label = "Timestamp"
         self.angle_data = []
         self.force_data = []
+        self.stiffness_data = []
+        self.moment_data = []
         self.root = root
         self.root.title("Data Visualizer")
         mainWinBgColor = "#eb6b34"
@@ -53,10 +55,10 @@ class App:
         # Establish Serial Connection
 
         try:
-            self.ser = serial.Serial(self.port, self.baud, timeout=2)
+            self.ser = serial.Serial(self.port, self.baud, timeout=3)
             print("Serial connection established.")
             print("Calibrating sensors...")
-            time.sleep(4)
+            time.sleep(15)
             calibration_message = self.ser.readline().decode('utf-8')
             # print(calibration_message)
             if calibration_message == "a":
@@ -67,9 +69,9 @@ class App:
             print("Failed to establish serial connection:", e)
             return
         
-        time.sleep(2)
+        # time.sleep(2)
         
-        time.sleep(2)
+        time.sleep(0.1)
 
         
 
@@ -104,7 +106,9 @@ class App:
         # Plotting format
 
         self.x_axis_label = "Angle (deg)"
-        self.y_axis_label = "Force (lbs)"
+        self.y_axis_label = "Moment (Nm)"
+        self.force_label = "Force (lbs)"
+        self.stiffness_label = "Stiffness (Nm/deg)"
         self.y_scale = 10
         self.fig_width = 5
         self.fig_height = 4
@@ -113,13 +117,17 @@ class App:
         # self.line, = self.ax.plot([], [], lw=2)
         self.ax.scatter([], [])
         self.ax.set_xlim(0, 100)
-        self.ax.set_ylim(-2, self.y_scale + 5) # TODO: dynamically adjust ylim
+        self.ylim = 1
+        self.ax.set_ylim(-self.ylim, self.ylim) # TODO: dynamically adjust ylim
         self.ax.set_xlabel(self.x_axis_label)
         self.ax.set_ylabel(self.y_axis_label)
         # self.ax.set_title(self.session_folder_path) # TODO: set title to data file name
 
 
         # self.fig, self.ax = plt.subplots(figsize=(5, 4))  # Adjust figsize as needed
+        # self.canvas = FigureCanvasTkAgg(self.fig, master=self.middle_frame)
+        # self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.middle_frame)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
@@ -147,6 +155,7 @@ class App:
     def read_serial(self):
         while self.is_reading:
             try: 
+                self.ser = serial.Serial(self.port, self.baud, timeout=0.1)
                 self.ser.write(b'g') # write to Arduino
                 data = self.ser.readline().decode('utf-8').strip()
 
@@ -157,55 +166,53 @@ class App:
 
                 with self.lock:
                         self.time_list.append(time.time())
+
+                        # add adjusted angle
+
+                        # calculate moment
+                        X_m = 0.3683 # meters (from knee)
+                        force_newtons = force * 4.448222 # convert to knewtons
+                        moment = X_m * force_newtons 
+                        
+
                         self.angle_data.append(angle)
+                        self.moment_data.append(moment)
                         self.force_data.append(force)
+                        self.stiffness_data.append(np.abs(moment / (angle + 0.0001)))
                 time.sleep(0.1)
+
 
             except Exception as e:
                 print("Error reading data:", e)
                 self.is_reading = False
                 self.ser.close()
 
-        
 
     def update_plot(self):
 
         with self.lock:
-            if self.angle_data and self.force_data:
+            if self.angle_data and self.moment_data:
                 self.ax.clear()
-                self.ax.scatter(self.angle_data, self.force_data)
-                self.ax.set_ylim(-2, self.y_scale + 5)
+                self.ax.scatter(self.angle_data, self.moment_data)
+                # self.ax.set_ylim(-2, self.y_scale + 5)
+                self.ax.set_xlim(min(self.angle_data) - 2, max(self.angle_data) + 2)
+                # self.ax.set_ylim(min(self.force_data) - 5, max(self.moment_data) + 5)
+                self.ax.set_ylim(min(self.moment_data) - 0.2, max(self.moment_data) + 0.2)
                 self.ax.set_xlabel(self.x_axis_label)
                 self.ax.set_ylabel(self.y_axis_label)
                 self.canvas.draw()
         if self.is_reading:
             self.root.after(100, self.update_plot)
 
-        # try:
-        #     self.ser.write(b'g') # write to Arduino
-        #     data = self.ser.readline().decode('utf-8').strip()
-
-        #     angle, force = map(float, data.split(','))
-
-        #     print("Received angle:", angle)  # Add this line for debugging
-        #     print("Received force:", force)  # Add this line for debugging
-        #     if data:
-        #         # if len(self.time_list) == 0:
-        #         #     self.time_first = time.time() # save first timestamp
-        #         self.time_list.append(time.time())
-        #         self.angle_data.append(angle)
-        #         self.force_data.append(force)
-        #         self.ax.clear()
-        #         self.ax.scatter(self.angle_data, self.force_data)
-        #         self.ax.set_ylim(-2, self.y_scale + 5)  # Update y-axis limits
-        #         self.canvas.draw()
-        #     if self.is_reading:
-        #         self.root.after(100, self.update_plot)  # Schedule the update every 100 milliseconds
-        # except Exception as e:
-        #     print("Error reading data:", e)
-        #     # Handle serial communication error gracefully
-        #     self.ser.close()  # Close the serial connection
-        #     return
+    # def update_plot(self):
+    #     with self.lock:
+    #         if self.angle_data and self.force_data:
+    #             self.scatter.set_offsets(np.c_[self.angle_data[-100:], self.force_data[-100:]])  # Update the last 100 points
+    #             self.ax.set_xlim(min(self.angle_data[-100:]), max(self.angle_data[-100:]))
+    #             self.ax.set_ylim(min(self.force_data[-100:]), max(self.force_data[-100:]))
+    #             self.canvas.draw()
+    #     if self.is_reading:
+    #         self.root.after(100, self.update_plot)
 
 
     def on_entry_click(self, event):
@@ -221,8 +228,6 @@ class App:
             self.directory_path_entry.config(fg='grey')  # Change text color to grey
     
     # -- Plotting Logic --
-
-    
     
     def browse_directory(self):
         directory_path = filedialog.askdirectory()
@@ -284,10 +289,10 @@ class App:
         file_path = os.path.join(self.session_folder_path, self.csv_filename)
         with open(file_path, "w", newline="") as data_file:
             csv_writer = csv.writer(data_file)
-            csv_writer.writerow([self.timestamp_label, self.x_axis_label, self.y_axis_label])
+            csv_writer.writerow([self.timestamp_label, self.x_axis_label, self.y_axis_label, self.force_label, self.stiffness_label])
             
-            for t, x, y in zip(self.time_list, self.angle_data, self.force_data):
-                csv_writer.writerow([t, x, y])
+            for t, x, y, force, stiffness in zip(self.time_list, self.angle_data, self.moment_data, self.force_data, self.stiffness_data):
+                csv_writer.writerow([t, x, y, force, stiffness])
                 # for i in range(len(self.time_list)):
                     
 
@@ -297,9 +302,9 @@ class App:
 
         self.fig, self.ax = plt.subplots(figsize=(self.fig_width, self.fig_height))
         # self.line, = self.ax.scatter(self.angle_data, self.force_data, lw=2)
-        self.ax.scatter(self.angle_data, self.force_data)
-        self.ax.set_xlim(min(self.angle_data), max(self.force_data))
-        self.ax.set_ylim(min(self.angle_data), max(self.force_data))
+        self.ax.scatter(self.angle_data, self.moment_data)
+        self.ax.set_xlim(min(self.angle_data) - 3, max(self.angle_data) + 3)
+        self.ax.set_ylim(min(self.moment_data) - 0.2, max(self.moment_data) + 0.2)
         self.ax.set_xlabel(self.x_axis_label)
         self.ax.set_ylabel(self.y_axis_label)
 
