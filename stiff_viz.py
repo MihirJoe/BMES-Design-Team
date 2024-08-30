@@ -73,7 +73,7 @@ class App:
         
         time.sleep(0.1)
         
-        # Pull Request Test
+        # Pull Request Test personal branch
         
 
         # Set the font size to 12
