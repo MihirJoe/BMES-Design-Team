@@ -1,0 +1,39 @@
+#include <RobojaxBTS7960.h>
+
+#define RPWM_1 3 // define pin 3 for RPWM pin (output)
+#define R_EN_1 2 // define pin 2 for R_EN pin (input)
+#define R_IS_1 1 // define pin 5 for R_IS pin (output)
+
+#define LPWM_1 6 // define pin 6 for LPWM pin (output)
+#define L_EN_1 5 // define pin 7 for L_EN pin (input)
+#define L_IS_1 4 // define pin 8 for L_IS pin (output)
+
+#define CW 1 //
+#define CCW 0 //
+#define debug 1 //
+
+RobojaxBTS7960 motor1(R_EN_1, RPWM_1, R_IS_1, L_EN_1, LPWM_1, L_IS_1, debug); // define motor 1 object
+
+void setup() {
+  Serial.begin(9600);
+  motor1.begin();
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    String command = Serial.readStringUntil('\n');
+    command.trim();  // Remove any extra whitespace or newlines
+
+    if (command.startsWith("rotate")) {
+      int firstComma = command.indexOf(',');
+      int secondComma = command.indexOf(',', firstComma + 1);
+
+      int speed = command.substring(firstComma + 1, secondComma).toInt();
+      int direction = command.substring(secondComma + 1).toInt();
+
+      motor1.rotate(speed, direction == 1 ? CW : CCW);
+    } else if (command == "stop") {
+      motor1.stop();
+    }
+  }
+}
