@@ -69,13 +69,13 @@ class App(Actuator):
         except Exception as e:
             print("Failed to establish serial connection:", e)
             return
-        
+
         # time.sleep(2)
-        
+
         time.sleep(0.1)
-        
+
         # Pull Request Test personal branch
-        
+
 
         # Set the font size to 12
         style = Style()
@@ -88,7 +88,7 @@ class App(Actuator):
         self.top_frame.grid(row=0, column=0, sticky="ew")
 
         top_frame = self.top_frame
-        
+
         # Directory path entry
         placeholder_text = "Enter directory path"
         self.directory_path_var = tk.StringVar()
@@ -101,10 +101,10 @@ class App(Actuator):
         self.browse_button = tk.Button(top_frame, text="Browse", command=self.browse_directory, bg="#eb6b34")
         self.browse_button.grid(row=0, column=1, padx=5, pady=5)
 
-        # --- Middle Section --- 
+        # --- Middle Section ---
         self.middle_frame = ttk.Frame(self.root)
         self.middle_frame.grid(row=1, column=0, sticky="nsew")
-        
+
         # Plotting format
 
         self.x_axis_label = "Angle (deg)"
@@ -136,20 +136,28 @@ class App(Actuator):
         # --- Right Section ---
         self.right_frame = tk.Frame(self.root)
         self.right_frame.grid(row=0, column=1, rowspan=2, sticky="ns")
-        
+
         self.export_button = tk.Button(self.right_frame, text="Export", command=self.export_data, bg="#eb6b34")
         self.export_button.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
-        
+
         self.start_button = tk.Button(self.right_frame, text="Start", command=self.start_process, bg="#eb6b34")
         self.start_button.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
-        
+
         self.stop_button = tk.Button(self.right_frame, text="Stop", command=self.stop_process, bg="#eb6b34")
         self.stop_button.grid(row=2, column=0, padx=5, pady=5, sticky="ew")
 
         # self.force_button = tk.Button(self.right_frame, text="Force", command=self.linear_act_process, bg="#eb6b34")
         self.force_button = tk.Button(self.right_frame, text="Force", command=self.force_button, bg="#eb6b34")
         self.force_button.grid(row=3, column=0, padx=5, pady=5, sticky="ew")
-        
+
+        self.force_var = IntVar(self.right_frame,1)
+        self.force_radio_1 = tk.Radiobutton(self.right_frame,variable=self.force_var,value=1,text="Run and Auto Retract")
+        self.force_radio_1.grid(row=4, column=0, padx=5, pady=5, sticky="ew")
+        self.force_radio_2 = tk.Radiobutton(self.right_frame,variable=self.force_var,value=2,text="Run Only")
+        self.force_radio_2.grid(row=5, column=0, padx=5, pady=5, sticky="ew")
+        self.force_radio_3 = tk.Radiobutton(self.right_frame,variable=self.force_var,value=3,text="Retract Only")
+        self.force_radio_3.grid(row=6, column=0, padx=5, pady=5, sticky="ew")
+
         # self.next_button = tk.Button(self.right_frame, text="Next", command=self.next_step, bg="#eb6b34")
         # self.next_button.grid(row=3, column=0, padx=5, pady=5, sticky="ew")
 
@@ -160,7 +168,7 @@ class App(Actuator):
 
     def read_serial(self):
         while self.is_reading:
-            try: 
+            try:
                 self.ser = serial.Serial(self.port, self.baud, timeout=0.1)
                 self.ser.write(b'g') # write to Arduino
                 data = self.ser.readline().decode('utf-8').strip()
@@ -178,8 +186,8 @@ class App(Actuator):
                         # calculate moment
                         X_m = 0.3683 # meters (from knee)
                         force_newtons = force * 4.448222 # convert to knewtons
-                        moment = X_m * force_newtons 
-                        
+                        moment = X_m * force_newtons
+
 
                         self.angle_data.append(angle)
                         self.moment_data.append(moment)
@@ -232,9 +240,9 @@ class App(Actuator):
         if not self.directory_path_var.get():
             self.directory_path_entry.insert(0, "Enter directory path...")  # Restore placeholder text
             self.directory_path_entry.config(fg='grey')  # Change text color to grey
-    
+
     # -- Plotting Logic --
-    
+
     def browse_directory(self):
         directory_path = filedialog.askdirectory()
         self.directory_path_var.set(directory_path)
@@ -271,7 +279,7 @@ class App(Actuator):
         # self.data_file_name = filename
         self.is_reading = False
         # self.serial_thread.join()
-        
+
         # Export data to CSV & PDF
         self.export_csv()
         self.export_pdf()
@@ -285,44 +293,19 @@ class App(Actuator):
         self.serial_thread.join()
 
     def force_button(self):
-        dialog = tk.Toplevel()
-        v = tk.IntVar(1)
-        option_1 = tk.Radiobutton(dialog,variable=v,value=1,text="Run and Auto Retract")
-        option_2 = tk.Radiobutton(dialog,variable=v,value=2,text="Run Only")
-        option_3 = tk.Radiobutton(dialog,variable=v,value=2,text="Retract Only")
-
-        self.run_and_auto_retract(10.7)
-
-    # def run_and_auto_retract(self):
-    #     try:
-    #         # Extend the actuator
-    #         print("Extending actuator...")
-    #         self.ser.write(b'e')  # Command to extend actuator
-
-    #         # Wait for actuator to extend fully
-    #         time.sleep(2)  # Adjust based on actuator speed and required extension time
-
-    #         # Retract the actuator
-    #         print("Retracting actuator...")
-    #         self.ser.write(b'r')  # Command to retract actuator
-
-    #         # Wait for actuator to retract fully
-    #         time.sleep(2)  # Adjust based on actuator speed and required retraction time
-
-    #         # Optional: Automatically start the process again if needed
-    #         print("Cycle complete. Restarting process.")
-    #         self.start_process()  # Starts the process again if needed
-
-        # except Exception as e:
-        #     print("Error controlling actuator:", e)
-
-        
+        selection = self.force_var.get()
+        if selection == 1:
+            self.run_and_auto_retract(10.7)
+        elif selection == 2:
+            self.run_only(10.7)
+        else:
+            self.retract_only()
 
     def next_step(self):
         # Implement next step functionality here
 
         # TODO: save time and force columns to same CSV for "n" sessions
-        # for this, we should append all the data to a dataframe and then 
+        # for this, we should append all the data to a dataframe and then
         pass
 
     def export_csv(self):
@@ -330,11 +313,11 @@ class App(Actuator):
         with open(file_path, "w", newline="") as data_file:
             csv_writer = csv.writer(data_file)
             csv_writer.writerow([self.timestamp_label, self.x_axis_label, self.y_axis_label, self.force_label, self.stiffness_label])
-            
+
             for t, x, y, force, stiffness in zip(self.time_list, self.angle_data, self.moment_data, self.force_data, self.stiffness_data):
                 csv_writer.writerow([t, x, y, force, stiffness])
                 # for i in range(len(self.time_list)):
-                    
+
 
     def export_pdf(self):
 
@@ -353,15 +336,15 @@ class App(Actuator):
         with PdfPages(file_path) as pdf:
             pdf.savefig()
 
- 
+
 def main():
     root = tk.Tk()
     root.title("Real-Time Arduino Data Plot")
-    port = "/dev/tty.usbmodem1201" #"/dev/tty.usbmodem2101"  # Update with your port
+    port = "/dev/ttyACM0" #"/dev/tty.usbmodem2101"  # Update with your port
     baud = 9600  # Update with your baud rate
     arduino_plotter = App(root, port, baud)
     root.mainloop()
-  
+
 
 if __name__ == "__main__":
     main()
@@ -369,7 +352,7 @@ if __name__ == "__main__":
 
 
 # TODO:
-    
+
     # 1. play/pause
     # 2. gray out all buttons at start
     # 3. change text field to directory label
@@ -382,4 +365,3 @@ if __name__ == "__main__":
     # 9. Update UI layout
     # 10. implement PDF
     # 11. Format CSV to accomodate multiple sessions
-    
