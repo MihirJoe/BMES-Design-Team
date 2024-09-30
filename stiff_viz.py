@@ -24,8 +24,11 @@ import threading
 from Linear_actuator.actuator_basics import Actuator
 
 class App(Actuator):
+   
     def __init__(self, root, port, baud):
+        super().__init__()
         #setting title
+        # self.arduino = None
         self.port = port
         self.baud = baud
         self.time_list = []
@@ -340,7 +343,7 @@ class App(Actuator):
 def main():
     root = tk.Tk()
     root.title("Real-Time Arduino Data Plot")
-    port = "/dev/ttyACM0" #"/dev/tty.usbmodem2101"  # Update with your port
+    port = "/dev/tty.usbmodem1201" #"/dev/tty.usbmodem2101"  # Update with your port
     baud = 9600  # Update with your baud rate
     arduino_plotter = App(root, port, baud)
     root.mainloop()
