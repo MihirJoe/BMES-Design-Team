@@ -21,8 +21,9 @@ import numpy as np
 import serial
 import time
 import threading
+from Linear_actuator.actuator_basics import Actuator
 
-class App:
+class App(Actuator):
     def __init__(self, root, port, baud):
         #setting title
         self.port = port
@@ -144,6 +145,10 @@ class App:
         
         self.stop_button = tk.Button(self.right_frame, text="Stop", command=self.stop_process, bg="#eb6b34")
         self.stop_button.grid(row=2, column=0, padx=5, pady=5, sticky="ew")
+
+        # self.force_button = tk.Button(self.right_frame, text="Force", command=self.linear_act_process, bg="#eb6b34")
+        self.force_button = tk.Button(self.right_frame, text="Force", command=self.force_button, bg="#eb6b34")
+        self.force_button.grid(row=3, column=0, padx=5, pady=5, sticky="ew")
         
         # self.next_button = tk.Button(self.right_frame, text="Next", command=self.next_step, bg="#eb6b34")
         # self.next_button.grid(row=3, column=0, padx=5, pady=5, sticky="ew")
@@ -279,6 +284,40 @@ class App:
         self.is_reading = False
         self.serial_thread.join()
 
+    def force_button(self):
+        dialog = tk.Toplevel()
+        v = tk.IntVar(1)
+        option_1 = tk.Radiobutton(dialog,variable=v,value=1,text="Run and Auto Retract")
+        option_2 = tk.Radiobutton(dialog,variable=v,value=2,text="Run Only")
+        option_3 = tk.Radiobutton(dialog,variable=v,value=2,text="Retract Only")
+
+        self.run_and_auto_retract(10.7)
+
+    # def run_and_auto_retract(self):
+    #     try:
+    #         # Extend the actuator
+    #         print("Extending actuator...")
+    #         self.ser.write(b'e')  # Command to extend actuator
+
+    #         # Wait for actuator to extend fully
+    #         time.sleep(2)  # Adjust based on actuator speed and required extension time
+
+    #         # Retract the actuator
+    #         print("Retracting actuator...")
+    #         self.ser.write(b'r')  # Command to retract actuator
+
+    #         # Wait for actuator to retract fully
+    #         time.sleep(2)  # Adjust based on actuator speed and required retraction time
+
+    #         # Optional: Automatically start the process again if needed
+    #         print("Cycle complete. Restarting process.")
+    #         self.start_process()  # Starts the process again if needed
+
+        # except Exception as e:
+        #     print("Error controlling actuator:", e)
+
+        
+
     def next_step(self):
         # Implement next step functionality here
 
@@ -318,7 +357,7 @@ class App:
 def main():
     root = tk.Tk()
     root.title("Real-Time Arduino Data Plot")
-    port = "/dev/tty.usbmodem101" #"/dev/tty.usbmodem2101"  # Update with your port
+    port = "/dev/tty.usbmodem1201" #"/dev/tty.usbmodem2101"  # Update with your port
     baud = 9600  # Update with your baud rate
     arduino_plotter = App(root, port, baud)
     root.mainloop()
