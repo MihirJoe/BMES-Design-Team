@@ -4,6 +4,7 @@ import platform
 import sys
 
 class Actuator:
+    # Implemented class structure
     def __init__(self):
         self.port = self.get_platform_port()
         self.arduino = None
