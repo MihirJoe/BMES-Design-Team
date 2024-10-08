@@ -1,16 +1,26 @@
-#include "HX711.h"
-#include "Wire.h"
+#include <HX711.h>
 #include <MPU6050_light.h>
+#include <RobojaxBTS7960.h>
+#include <Wire.h>
+
+#define RPWM_1 3 // RPWM pin (output)
+#define R_EN_1 2 // R_EN pin (input)
+#define R_IS_1 5 // R_IS pin (output)
+
+#define LPWM_1 6 // LPWM pin (output)
+#define L_EN_1 5 // L_EN pin (input)
+#define L_IS_1 4 // L_IS pin (output)
+
+RobojaxBTS7960 motor1(R_EN_1, RPWM_1, R_IS_1, L_EN_1, LPWM_1, L_IS_1, 1); // define motor 1 object
 
 // Load Cell Initialization
 
-#define LOADCELL_DOUT_PIN  3
-#define LOADCELL_SCK_PIN  2
+#define LOADCELL_DOUT_PIN  9
+#define LOADCELL_SCK_PIN  10
 
 HX711 scale;
 
 float calibration_factor = -6500; // -6500 //-7050 worked for my 440lb max scale setup
-char userInput;
 
 // IMU Initialization
 
@@ -27,8 +37,9 @@ struct Angles {
 };
 
 void setup() {
-  
   Serial.begin(9600);
+
+  motor1.begin();
 
   // Load Cell Calibration
   scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
@@ -40,12 +51,12 @@ void setup() {
 
   // IMU Calibration
   Wire.begin();
-  
+
   byte status = mpu.begin();
   // Serial.print(F("MPU6050 status: "));
   // Serial.println(status);
   while(status!=0){ } // stop everything if could not connect to MPU6050
-  
+
   mpu.calcOffsets(); // gyro and accelerometer
   delay(1000);
   Serial.print("a");
@@ -66,13 +77,12 @@ void setup() {
 
 }
 
-
 Angles measureAverageAngles() {
   // sumX = 0;
   // sumY = 0;
   // sumZ = 0;
   // readingCount = 0;
-  
+
   // while ((millis() - timer) < 10) { // Collect data for 1 second
   //   mpu.update();
   //   sumX += mpu.getAngleX();
@@ -86,7 +96,7 @@ Angles measureAverageAngles() {
   result.angleY = mpu.getAngleY();
   result.angleZ = mpu.getAngleZ();
   // if (readingCount > 0) {
-    
+
   // } else {
   //   result.angleX = 0;
   //   result.angleY = 0;
@@ -96,26 +106,27 @@ Angles measureAverageAngles() {
   return result;
 }
 
-
-
 void loop() {
-
   mpu.update(); // update IMU
 
   if(Serial.available()>0)
   {
-    
-    userInput = Serial.read();
-
     scale.set_scale(calibration_factor); //Adjust to this calibration factor for force
 
-    if (userInput == 'g') {
-      scale.set_scale(calibration_factor); //Adjust to this calibration factor for force
-      measureAngles = true;
-      // timer = millis();
-    }
+    String command = Serial.readStringUntil('\n');
+    command.trim();  // Remove any extra whitespace or newlines
 
-    if (measureAngles) {
+    if (command.startsWith("rotate")) {
+      int firstComma = command.indexOf(',');
+      int secondComma = command.indexOf(',', firstComma + 1);
+
+      int speed = command.substring(firstComma + 1, secondComma).toInt();
+      int direction = command.substring(secondComma + 1).toInt();
+
+      motor1.rotate(speed, direction == 1 ? CW : CCW);
+    } else if (command == "stop") {
+      motor1.stop();
+    } else if (command == "getforce") {
       force = scale.get_units(); // get force
 
       Angles avgAngles = measureAverageAngles();
@@ -127,4 +138,3 @@ void loop() {
     }
   }
 }
-

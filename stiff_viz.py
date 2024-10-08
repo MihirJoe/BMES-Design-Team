@@ -21,9 +21,12 @@ import numpy as np
 import serial
 import time
 import threading
+from arduino import Actuator
 
-class App:
+class App(Actuator):
     def __init__(self, root, port, baud):
+        super().__init__(port)
+
         #setting title
         self.port = port
         self.baud = baud
@@ -58,7 +61,7 @@ class App:
             self.ser = serial.Serial(self.port, self.baud, timeout=3)
             print("Serial connection established.")
             print("Calibrating sensors...")
-            time.sleep(15)
+            time.sleep(30)
             calibration_message = self.ser.readline().decode('utf-8')
             # print(calibration_message)
             if calibration_message == "a":
@@ -68,12 +71,12 @@ class App:
         except Exception as e:
             print("Failed to establish serial connection:", e)
             return
-        
+
         # time.sleep(2)
-        
+
         time.sleep(0.1)
 
-        
+
 
         # Set the font size to 12
         style = Style()
@@ -86,7 +89,7 @@ class App:
         self.top_frame.grid(row=0, column=0, sticky="ew")
 
         top_frame = self.top_frame
-        
+
         # Directory path entry
         placeholder_text = "Enter directory path"
         self.directory_path_var = tk.StringVar()
@@ -99,10 +102,10 @@ class App:
         self.browse_button = tk.Button(top_frame, text="Browse", command=self.browse_directory, bg="#eb6b34")
         self.browse_button.grid(row=0, column=1, padx=5, pady=5)
 
-        # --- Middle Section --- 
+        # --- Middle Section ---
         self.middle_frame = ttk.Frame(self.root)
         self.middle_frame.grid(row=1, column=0, sticky="nsew")
-        
+
         # Plotting format
 
         self.x_axis_label = "Angle (deg)"
@@ -134,16 +137,28 @@ class App:
         # --- Right Section ---
         self.right_frame = tk.Frame(self.root)
         self.right_frame.grid(row=0, column=1, rowspan=2, sticky="ns")
-        
+
         self.export_button = tk.Button(self.right_frame, text="Export", command=self.export_data, bg="#eb6b34")
         self.export_button.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
-        
+
         self.start_button = tk.Button(self.right_frame, text="Start", command=self.start_process, bg="#eb6b34")
         self.start_button.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
-        
+
         self.stop_button = tk.Button(self.right_frame, text="Stop", command=self.stop_process, bg="#eb6b34")
         self.stop_button.grid(row=2, column=0, padx=5, pady=5, sticky="ew")
-        
+
+        # self.force_button = tk.Button(self.right_frame, text="Force", command=self.linear_act_process, bg="#eb6b34")
+        self.force_button = tk.Button(self.right_frame, text="Force", command=self.force_button, bg="#eb6b34")
+        self.force_button.grid(row=3, column=0, padx=5, pady=5, sticky="ew")
+
+        self.force_var = IntVar(self.right_frame,1)
+        self.force_radio_1 = tk.Radiobutton(self.right_frame,variable=self.force_var,value=1,text="Run and Auto Retract")
+        self.force_radio_1.grid(row=4, column=0, padx=5, pady=5, sticky="ew")
+        self.force_radio_2 = tk.Radiobutton(self.right_frame,variable=self.force_var,value=2,text="Run Only")
+        self.force_radio_2.grid(row=5, column=0, padx=5, pady=5, sticky="ew")
+        self.force_radio_3 = tk.Radiobutton(self.right_frame,variable=self.force_var,value=3,text="Retract Only")
+        self.force_radio_3.grid(row=6, column=0, padx=5, pady=5, sticky="ew")
+
         # self.next_button = tk.Button(self.right_frame, text="Next", command=self.next_step, bg="#eb6b34")
         # self.next_button.grid(row=3, column=0, padx=5, pady=5, sticky="ew")
 
@@ -154,9 +169,9 @@ class App:
 
     def read_serial(self):
         while self.is_reading:
-            try: 
+            try:
                 self.ser = serial.Serial(self.port, self.baud, timeout=0.1)
-                self.ser.write(b'g') # write to Arduino
+                self.ser.write(b'getforce') # write to Arduino
                 data = self.ser.readline().decode('utf-8').strip()
 
                 angle, force = map(float, data.split(','))
@@ -172,8 +187,8 @@ class App:
                         # calculate moment
                         X_m = 0.3683 # meters (from knee)
                         force_newtons = force * 4.448222 # convert to knewtons
-                        moment = X_m * force_newtons 
-                        
+                        moment = X_m * force_newtons
+
 
                         self.angle_data.append(angle)
                         self.moment_data.append(moment)
@@ -226,9 +241,9 @@ class App:
         if not self.directory_path_var.get():
             self.directory_path_entry.insert(0, "Enter directory path...")  # Restore placeholder text
             self.directory_path_entry.config(fg='grey')  # Change text color to grey
-    
+
     # -- Plotting Logic --
-    
+
     def browse_directory(self):
         directory_path = filedialog.askdirectory()
         self.directory_path_var.set(directory_path)
@@ -265,7 +280,7 @@ class App:
         # self.data_file_name = filename
         self.is_reading = False
         # self.serial_thread.join()
-        
+
         # Export data to CSV & PDF
         self.export_csv()
         self.export_pdf()
@@ -278,11 +293,20 @@ class App:
         self.is_reading = False
         self.serial_thread.join()
 
+    def force_button(self):
+        selection = self.force_var.get()
+        if selection == 1:
+            self.run_and_auto_retract(10.7)
+        elif selection == 2:
+            self.run_only(10.7)
+        else:
+            self.retract_only()
+
     def next_step(self):
         # Implement next step functionality here
 
         # TODO: save time and force columns to same CSV for "n" sessions
-        # for this, we should append all the data to a dataframe and then 
+        # for this, we should append all the data to a dataframe and then
         pass
 
     def export_csv(self):
@@ -290,11 +314,11 @@ class App:
         with open(file_path, "w", newline="") as data_file:
             csv_writer = csv.writer(data_file)
             csv_writer.writerow([self.timestamp_label, self.x_axis_label, self.y_axis_label, self.force_label, self.stiffness_label])
-            
+
             for t, x, y, force, stiffness in zip(self.time_list, self.angle_data, self.moment_data, self.force_data, self.stiffness_data):
                 csv_writer.writerow([t, x, y, force, stiffness])
                 # for i in range(len(self.time_list)):
-                    
+
 
     def export_pdf(self):
 
@@ -313,15 +337,15 @@ class App:
         with PdfPages(file_path) as pdf:
             pdf.savefig()
 
- 
+
 def main():
     root = tk.Tk()
     root.title("Real-Time Arduino Data Plot")
-    port = "/dev/tty.usbmodem101" #"/dev/tty.usbmodem2101"  # Update with your port
+    port = "/dev/ttyACM0" #"/dev/tty.usbmodem2101"  # Update with your port
     baud = 9600  # Update with your baud rate
     arduino_plotter = App(root, port, baud)
     root.mainloop()
-  
+
 
 if __name__ == "__main__":
     main()
@@ -329,7 +353,7 @@ if __name__ == "__main__":
 
 
 # TODO:
-    
+
     # 1. play/pause
     # 2. gray out all buttons at start
     # 3. change text field to directory label
@@ -342,4 +366,3 @@ if __name__ == "__main__":
     # 9. Update UI layout
     # 10. implement PDF
     # 11. Format CSV to accomodate multiple sessions
-    
