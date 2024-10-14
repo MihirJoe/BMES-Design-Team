@@ -145,10 +145,10 @@ class App:
             row=1, column=1, padx=5, pady=5, sticky="ew"
         )
 
-        self._current_speed = tk.IntVar(value=100)
+        self._speed_var = tk.IntVar(value=100)
         self._speed_scale = tk.Scale(
             self.right_frame,
-            variable=self._current_speed,
+            variable=self._speed_var,
             label="Speed (%)",
             from_=10,
             to=100,
@@ -157,17 +157,16 @@ class App:
         )
         self._speed_scale.grid(row=2, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
 
-        self._current_duration_s = tk.DoubleVar(value=10.7)
-        self._duration_scale = tk.Scale(
+        self._displacement_mm_var = tk.IntVar(value=150)
+        self._displacement_scale = tk.Scale(
             self.right_frame,
-            variable=self._current_duration_s,
-            label="Duration (s)",
-            from_=.1,
-            to=10.7,
-            resolution=.1,
+            variable=self._displacement_mm_var,
+            label="Displacement (mm)",
+            from_=1,
+            to=150,
             orient=HORIZONTAL,
         )
-        self._duration_scale.grid(row=3, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
+        self._displacement_scale.grid(row=3, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
 
         self._extend_button = tk.Button(
             self.right_frame,
@@ -317,17 +316,22 @@ class App:
         self.is_reading = False
         self.serial_thread.join()
 
-    def _current_duration_ms(self) -> int:
-        return int(self._current_duration_s.get() * 1000.0)
+    def _selected_duration_ms(self) -> float:
+        speed_mm_s = 14 * (self._selected_speed() / 100)
+        speed_mm_ms = speed_mm_s / 1000
+        return self._displacement_mm_var.get() / speed_mm_ms
+
+    def _selected_speed(self) -> int:
+        return self._speed_var.get()
 
     def _extend_linear_actuator(self):
         self.arduino.send_extend_command(
-            self._current_duration_ms(), self._current_speed.get()
+            int(self._selected_duration_ms()), self._selected_speed()
         )
 
     def _retract_linear_actuator(self):
         self.arduino.send_retract_command(
-            self._current_duration_ms(), self._current_speed.get()
+            int(self._selected_duration_ms()), self._selected_speed()
         )
 
     def next_step(self):
