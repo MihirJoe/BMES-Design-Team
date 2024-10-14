@@ -393,7 +393,6 @@ def main():
         sys.exit(1)
     except CalibrationException:
         print("a not recieved")
-        sys.exit(1)
 
     with arduino:
         App(root, arduino)
