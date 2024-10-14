@@ -145,18 +145,6 @@ class App:
             row=1, column=1, padx=5, pady=5, sticky="ew"
         )
 
-        self._speed_var = tk.IntVar(value=100)
-        self._speed_scale = tk.Scale(
-            self.right_frame,
-            variable=self._speed_var,
-            label="Speed (%)",
-            from_=10,
-            to=100,
-            resolution=10,
-            orient=HORIZONTAL,
-        )
-        self._speed_scale.grid(row=2, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
-
         self._displacement_mm_var = tk.IntVar(value=150)
         self._displacement_scale = tk.Scale(
             self.right_frame,
@@ -225,7 +213,6 @@ class App:
 
             except Exception as e:
                 print("Error reading data:", e)
-                self.is_reading = False
 
     def update_plot(self):
 
@@ -324,21 +311,16 @@ class App:
         self.serial_thread.join()
 
     def _selected_duration_ms(self) -> float:
-        speed_mm_s = 14 * (self._selected_speed() / 100)
-        speed_mm_ms = speed_mm_s / 1000
-        return self._displacement_mm_var.get() / speed_mm_ms
-
-    def _selected_speed(self) -> int:
-        return self._speed_var.get()
+        return self._displacement_mm_var.get() / .014
 
     def _extend_linear_actuator(self):
         self.arduino.send_extend_command(
-            int(self._selected_duration_ms()), self._selected_speed()
+            int(self._selected_duration_ms())
         )
 
     def _retract_linear_actuator(self):
         self.arduino.send_retract_command(
-            int(self._selected_duration_ms()), self._selected_speed()
+            int(self._selected_duration_ms())
         )
 
     def next_step(self):

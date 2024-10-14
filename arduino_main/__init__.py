@@ -14,9 +14,9 @@ class Arduino:
     # Implemented class structure
     def __init__(self, port: str):
         self.serial = Serial(port=port, baudrate=9600)
-        self.serial.timeout = 30
-        if self.serial.readline() != b"a":
-            raise CalibrationException()
+        # self.serial.timeout = 30
+        # if self.serial.readline() != b"a":
+        #     raise CalibrationException()
 
         self.serial.timeout = 1
 
@@ -38,13 +38,13 @@ class Arduino:
         self._send_command("m")
 
     def recv_measurement(self) -> tuple[float, float]:
-        map(float, self.serial.readline().decode("utf-8").split(","))
+        return map(float, self.serial.readline().decode("utf-8").strip().split(","))
 
-    def send_extend_command(self, duration_ms: int, speed: int):
-        self._send_command(f"e,{duration_ms},f{speed}")
+    def send_extend_command(self, duration_ms: int):
+        self._send_command(f"e,{duration_ms}")
 
-    def send_retract_command(self, duration_ms: int, speed: int):
-        self._send_command(f"r,{duration_ms},f{speed}")
+    def send_retract_command(self, duration_ms: int):
+        self._send_command(f"r,{duration_ms}")
 
     def send_stop_command(self):
         self._send_command("s")

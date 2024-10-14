@@ -52,8 +52,8 @@ void setupIMU() {
   byte status = IMU.begin();
   // Serial.print(F("MPU6050 status: "));
   // Serial.println(status);
-  while (status != 0) {
-  } // stop everything if could not connect to MPU6050
+  // while (status != 0) {
+  // } // stop everything if could not connect to MPU6050
 
   IMU.calcOffsets(); // gyro and accelerometer
   delay(1000);
@@ -159,9 +159,9 @@ enum LinearActuatorDirection {
   LAD_Extend = 1,
 };
 
-void moveLinearActuator(unsigned int const DurationMs, int const Speed,
+void moveLinearActuator(unsigned int const DurationMs,
                         int const Dir) {
-  LinAct.rotate(Speed, Dir);
+  LinAct.rotate(100, Dir);
   LinActMotionStartTime = millis();
   LinActMotionDurationMs = DurationMs;
 }
@@ -170,15 +170,12 @@ void serveMotionCommand(class CommandArgs &Args, int const Dir) {
   if (!Args.hasNext())
     return;
 
-  unsigned int const DurationMs =
-      constrain(Args.next().toInt(), LIN_ACT_MIN_MOVE_DURATION_MS,
+  unsigned int DurationMs = Args.next().toInt();
+  DurationMs =
+      constrain(DurationMs, LIN_ACT_MIN_MOVE_DURATION_MS,
                 LIN_ACT_MAX_MOVE_DURATION_MS);
 
-  int Speed = 100;
-  if (Args.hasNext())
-    Speed = constrain(Args.next().toInt(), 0, 100);
-
-  moveLinearActuator(DurationMs, Speed, Dir);
+  moveLinearActuator(DurationMs, Dir);
 }
 
 void serveExtendCommand(class CommandArgs &Args) {
