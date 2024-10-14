@@ -191,6 +191,13 @@ class App:
         self.root.grid_rowconfigure(1, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
 
+        # Clean up when the window is closed.
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
+
+    def close(self):
+        # TODO: join serial thread if it's running
+        self.root.quit()
+
     def read_serial(self):
         while self.is_reading:
             try:
@@ -397,6 +404,7 @@ def main():
     with arduino:
         App(root, arduino)
         root.mainloop()
+        root.destroy()
 
 
 if __name__ == "__main__":
