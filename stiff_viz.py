@@ -310,18 +310,14 @@ class App:
         self.is_reading = False
         self.serial_thread.join()
 
-    def _selected_duration_ms(self) -> float:
-        return self._displacement_mm_var.get() / .014
+    def _selected_duration_ms(self) -> int:
+        return min(10700, max(50, int(self._displacement_mm_var.get() / .014)))
 
     def _extend_linear_actuator(self):
-        self.arduino.send_extend_command(
-            int(self._selected_duration_ms())
-        )
+        self.arduino.send_extend_command(self._selected_duration_ms())
 
     def _retract_linear_actuator(self):
-        self.arduino.send_retract_command(
-            int(self._selected_duration_ms())
-        )
+        self.arduino.send_retract_command(self._selected_duration_ms())
 
     def next_step(self):
         # Implement next step functionality here
@@ -382,6 +378,7 @@ def main():
         sys.exit(1)
     except CalibrationException:
         print("a not recieved")
+        sys.exit(1)
 
     with arduino:
         App(root, arduino)

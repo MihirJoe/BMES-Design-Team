@@ -6,10 +6,10 @@
 #define SERIAL_BAUD 9600
 #define SERIAL_TIMEOUT_MS 500
 
-#define LOAD_CELL_DOUT_PIN 9
-#define LOAD_CELL_SCK_PIN 10
+#define SCALE_DOUT_PIN 9
+#define SCALE_SCK_PIN 10
 
-#define LOAD_CELL_CALIBRATION_FACTOR                                           \
+#define SCALE_CALIBRATION_FACTOR                                               \
   -6500.f // -7050 worked for my 440lb max scale setup
 
 #define LIN_ACT_RPWM_PIN 3 // output
@@ -23,27 +23,39 @@
 #define LIN_ACT_MIN_MOVE_DURATION_MS 50
 #define LIN_ACT_MAX_MOVE_DURATION_MS 10700
 
-static HX711 LoadCell;
-static MPU6050 IMU(Wire);
-static RobojaxBTS7960 LinAct(LIN_ACT_R_EN_PIN, LIN_ACT_RPWM_PIN,
-                             LIN_ACT_R_IS_PIN, LIN_ACT_L_EN_PIN,
-                             LIN_ACT_LPWM_PIN, LIN_ACT_L_IS_PIN, 1);
+HX711 Scale;
+MPU6050 IMU(Wire);
+// NOTE: make sure to use debug mode for Robojax library
+//       or else you may encounter problems
+//       when issuing a new motion command
+//       while the LA is already in motion
+RobojaxBTS7960 LinAct(LIN_ACT_R_EN_PIN, LIN_ACT_RPWM_PIN, LIN_ACT_R_IS_PIN,
+                      LIN_ACT_L_EN_PIN, LIN_ACT_LPWM_PIN, LIN_ACT_L_IS_PIN, 1);
 
-static unsigned long LinActMotionStartTime = 0;
-static unsigned int LinActMotionDurationMs = 0;
+unsigned long LinActMotionStartTime = 0;
+unsigned int LinActMotionDurationMs = 0;
+
+struct Angles {
+  float angleX;
+  float angleY;
+  float angleZ;
+};
 
 void setupSerial() {
   Serial.begin(SERIAL_BAUD);
   Serial.setTimeout(SERIAL_TIMEOUT_MS);
 }
 
-void setupLoadCell() {
-  LoadCell.begin(LOAD_CELL_DOUT_PIN, LOAD_CELL_SCK_PIN);
-  LoadCell.set_scale();
-  LoadCell.tare(); // Reset the scale to 0
+void setupScale() {
+  Scale.begin(SCALE_DOUT_PIN, SCALE_SCK_PIN);
+  Scale.set_scale();
+  Scale.tare(); // Reset the scale to 0
   // Serial.println("Load cell initialized");
 
-  LoadCell.read_average(); // Get a baseline reading
+  Scale.read_average(); // Get a baseline reading
+
+  Scale.set_scale(SCALE_CALIBRATION_FACTOR); // Adjust to this calibration
+                                             // factor for force
 }
 
 void setupIMU() {
@@ -52,21 +64,24 @@ void setupIMU() {
   byte status = IMU.begin();
   // Serial.print(F("MPU6050 status: "));
   // Serial.println(status);
-  // while (status != 0) {
-  // } // stop everything if could not connect to MPU6050
+  while (status != 0) {
+  } // stop everything if could not connect to MPU6050
 
   IMU.calcOffsets(); // gyro and accelerometer
-  delay(1000);
+  // Serial.println("Calculating offsets complete.");
 }
 
 void setupLinearActuator() { LinAct.begin(); }
 
 void setup() {
   setupSerial();
-  setupLoadCell();
+  setupScale();
+  // Serial.println("Setting up IMU...");
   setupIMU();
+  // Serial.println("IMU setup complete.");
   setupLinearActuator();
 
+  delay(1000);
   Serial.print("a");
   // Serial.flush();
   // TODO: send status updates to GUI on calibration, initial position
@@ -108,12 +123,6 @@ public:
   }
 };
 
-struct Angles {
-  float angleX;
-  float angleY;
-  float angleZ;
-};
-
 struct Angles measureAverageAngles() {
   // sumX = 0;
   // sumY = 0;
@@ -144,7 +153,7 @@ struct Angles measureAverageAngles() {
 }
 
 void serveMeasureCommand(class CommandArgs &Args) {
-  float const force = LoadCell.get_units(); // get force
+  float const force = Scale.get_units(); // get force
   Angles const avgAngles = measureAverageAngles();
 
   Serial.print(
@@ -194,7 +203,7 @@ void stopLinearActuator() {
 void serveStopCommand(class CommandArgs &Args) { stopLinearActuator(); }
 
 void serveCommand(String const &Name, class CommandArgs &Args) {
-  if (Name == "m")
+  if (Name == "g")
     serveMeasureCommand(Args);
   else if (Name == "e")
     serveExtendCommand(Args);
@@ -219,9 +228,6 @@ void serveIncomingCommand() {
 
 void loop() {
   IMU.update();
-  LoadCell.set_scale(
-      LOAD_CELL_CALIBRATION_FACTOR); // Adjust to this calibration factor for
-                                     // force
 
   if ((LinActMotionDurationMs > 0) &&
       ((millis() - LinActMotionStartTime) > LinActMotionDurationMs))

@@ -13,9 +13,10 @@ class Arduino:
 
     # Implemented class structure
     def __init__(self, port: str):
-        self.serial = Serial(port=port, baudrate=9600)
-        # self.serial.timeout = 30
-        # if self.serial.readline() != b"a":
+        self.serial = Serial(port=port, baudrate=9600, timeout=10)
+        # res = self.serial.readline().decode("utf-8")
+        # print(res.encode())
+        # if res != "\x00\x00a":
         #     raise CalibrationException()
 
         self.serial.timeout = 1
@@ -30,15 +31,16 @@ class Arduino:
         self.serial.close()  # Always close the connection when done
 
     def _send_command(self, command: str):
-        self.serial.write(command.encode())  # Send the command to Arduino
+        self.serial.write(command.encode("utf-8"))  # Send the command to Arduino
         self.serial.write(b"\n")
         time.sleep(0.1)  # Wait for Arduino to process the command
 
     def send_measure_command(self):
-        self._send_command("m")
+        self._send_command("g")
 
     def recv_measurement(self) -> tuple[float, float]:
-        return map(float, self.serial.readline().decode("utf-8").strip().split(","))
+        resp = self.serial.readline().decode("utf-8")
+        return map(float, resp.strip().split(","))
 
     def send_extend_command(self, duration_ms: int):
         self._send_command(f"e,{duration_ms}")
