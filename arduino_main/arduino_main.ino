@@ -9,8 +9,7 @@
 #define SCALE_DOUT_PIN 9
 #define SCALE_SCK_PIN 10
 
-#define SCALE_CALIBRATION_FACTOR                                               \
-  -6500.f // -7050 worked for my 440lb max scale setup
+#define SCALE_CALIBRATION_FACTOR -7770.f
 
 #define LIN_ACT_RPWM_PIN 3 // output
 #define LIN_ACT_R_EN_PIN 2 // input
