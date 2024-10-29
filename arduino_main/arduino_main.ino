@@ -12,11 +12,9 @@
 
 #define SCALE_CALIBRATION_FACTOR -7770.f
 
-#define LIN_ACT_R_IS_PIN 1
 #define LIN_ACT_R_EN_PIN 2
 #define LIN_ACT_RPWM_PIN 3
 
-#define LIN_ACT_L_IS_PIN 4
 #define LIN_ACT_L_EN_PIN 5
 #define LIN_ACT_LPWM_PIN 6
 
@@ -59,6 +57,11 @@ public:
   }
 
   void stop() {
+    // Disable the motor.
+    digitalWrite(LIN_ACT_R_EN_PIN, LOW);
+    digitalWrite(LIN_ACT_L_EN_PIN, LOW);
+
+    // Set the PWM pins to 0% duty cycle for good measure.
     digitalWrite(LIN_ACT_RPWM_PIN, LOW);
     digitalWrite(LIN_ACT_LPWM_PIN, LOW);
 
@@ -72,19 +75,32 @@ private:
   void configurePins() {
     pinMode(LIN_ACT_R_EN_PIN, OUTPUT);
     pinMode(LIN_ACT_RPWM_PIN, OUTPUT);
-    pinMode(LIN_ACT_R_IS_PIN, INPUT);
 
     pinMode(LIN_ACT_L_EN_PIN, OUTPUT);
     pinMode(LIN_ACT_LPWM_PIN, OUTPUT);
-    pinMode(LIN_ACT_L_IS_PIN, INPUT);
   }
 
   void actuate(Direction const Dir) {
+    int ActivePwmPin;
+    int InactivePwmPin;
+
+    switch (Dir) {
+    case Direction::In:
+      ActivePwmPin = LIN_ACT_LPWM_PIN;
+      InactivePwmPin = LIN_ACT_RPWM_PIN;
+      break;
+    case Direction::Out:
+      ActivePwmPin = LIN_ACT_RPWM_PIN;
+      InactivePwmPin = LIN_ACT_LPWM_PIN;
+      break;
+    }
+
+    analogWrite(ActivePwmPin, 0xff);
+    digitalWrite(InactivePwmPin, LOW);
+
+    // Enable the motor.
     digitalWrite(LIN_ACT_R_EN_PIN, HIGH);
     digitalWrite(LIN_ACT_L_EN_PIN, HIGH);
-
-    int const Pin = Dir == Direction::Out ? LIN_ACT_RPWM_PIN : LIN_ACT_LPWM_PIN;
-    analogWrite(Pin, 0xff);
   }
 };
 
