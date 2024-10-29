@@ -1,6 +1,5 @@
 #include <HX711.h>
 #include <MPU6050_light.h>
-#include <RobojaxBTS7960.h>
 #include <Wire.h>
 
 #define SERIAL_BAUD 9600
@@ -11,28 +10,84 @@
 
 #define SCALE_CALIBRATION_FACTOR -7770.f
 
-#define LIN_ACT_RPWM_PIN 3 // output
-#define LIN_ACT_R_EN_PIN 2 // input
-#define LIN_ACT_R_IS_PIN 5 // output
+#define LIN_ACT_R_IS_PIN 1
+#define LIN_ACT_R_EN_PIN 2
+#define LIN_ACT_RPWM_PIN 3
 
-#define LIN_ACT_LPWM_PIN 6 // output
-#define LIN_ACT_L_EN_PIN 5 // input
-#define LIN_ACT_L_IS_PIN 4 // output
+#define LIN_ACT_L_IS_PIN 4
+#define LIN_ACT_L_EN_PIN 5
+#define LIN_ACT_LPWM_PIN 6
 
 #define LIN_ACT_MIN_MOVE_DURATION_MS 50
 #define LIN_ACT_MAX_MOVE_DURATION_MS 10700
 
+/// \brief The HX711 scale.
 HX711 Scale;
+/// \brief The MPU6050 IMU.
 MPU6050 IMU(Wire);
-// NOTE: make sure to use debug mode for Robojax library
-//       or else you may encounter problems
-//       when issuing a new motion command
-//       while the LA is already in motion
-RobojaxBTS7960 LinAct(LIN_ACT_R_EN_PIN, LIN_ACT_RPWM_PIN, LIN_ACT_R_IS_PIN,
-                      LIN_ACT_L_EN_PIN, LIN_ACT_LPWM_PIN, LIN_ACT_L_IS_PIN, 1);
 
-unsigned long LinActMotionStartTime = 0;
-unsigned int LinActMotionDurationMs = 0;
+/// \brief The linear actuator.
+class LinearActuator {
+public:
+  enum Direction {
+    In,
+    Out,
+  };
+
+  void begin() { this->configurePins(); }
+
+  bool isMoving() const { return this->MotionDurationMs > 0; }
+
+  void update() {
+    if (this->isMoving() &&
+        ((millis() - this->MotionStartTime) > this->MotionDurationMs))
+      this->stop();
+  }
+
+  void move(unsigned int const DurationMs, Direction const Dir) {
+    this->actuate(Dir);
+    this->MotionStartTime = millis();
+    this->MotionDurationMs = DurationMs;
+  }
+
+  void home() {
+    this->actuate(Direction::In);
+    delay(LIN_ACT_MAX_MOVE_DURATION_MS);
+    this->stop();
+  }
+
+  void stop() {
+    digitalWrite(LIN_ACT_RPWM_PIN, LOW);
+    digitalWrite(LIN_ACT_LPWM_PIN, LOW);
+
+    this->MotionDurationMs = 0;
+  }
+
+private:
+  unsigned long MotionStartTime{0};
+  unsigned int MotionDurationMs{0};
+
+  void configurePins() {
+    pinMode(LIN_ACT_R_EN_PIN, OUTPUT);
+    pinMode(LIN_ACT_RPWM_PIN, OUTPUT);
+    pinMode(LIN_ACT_R_IS_PIN, INPUT);
+
+    pinMode(LIN_ACT_L_EN_PIN, OUTPUT);
+    pinMode(LIN_ACT_LPWM_PIN, OUTPUT);
+    pinMode(LIN_ACT_L_IS_PIN, INPUT);
+  }
+
+  void actuate(Direction const Dir) {
+    digitalWrite(LIN_ACT_R_EN_PIN, HIGH);
+    digitalWrite(LIN_ACT_L_EN_PIN, HIGH);
+
+    int const Pin = Dir == Direction::Out ? LIN_ACT_RPWM_PIN : LIN_ACT_LPWM_PIN;
+    analogWrite(Pin, 0xff);
+  }
+};
+
+/// \brief The linear actuator.
+LinearActuator LinAct;
 
 struct Angles {
   float angleX;
@@ -40,9 +95,9 @@ struct Angles {
   float angleZ;
 };
 
-void setupSerial() {
-  Serial.begin(SERIAL_BAUD);
-  Serial.setTimeout(SERIAL_TIMEOUT_MS);
+void setupLinearActuator() {
+  LinAct.begin();
+  LinAct.home();
 }
 
 void setupScale() {
@@ -70,15 +125,16 @@ void setupIMU() {
   // Serial.println("Calculating offsets complete.");
 }
 
-void setupLinearActuator() { LinAct.begin(); }
+void setupSerial() {
+  Serial.begin(SERIAL_BAUD);
+  Serial.setTimeout(SERIAL_TIMEOUT_MS);
+}
 
 void setup() {
-  setupSerial();
-  setupScale();
-  // Serial.println("Setting up IMU...");
-  setupIMU();
-  // Serial.println("IMU setup complete.");
   setupLinearActuator();
+  setupScale();
+  setupIMU();
+  setupSerial();
 
   delay(1000);
   Serial.print("a");
@@ -162,44 +218,26 @@ void serveMeasureCommand(class CommandArgs &Args) {
   Serial.println();
 }
 
-enum LinearActuatorDirection {
-  LAD_Retract = 0,
-  LAD_Extend = 1,
-};
-
-void moveLinearActuator(unsigned int const DurationMs,
-                        int const Dir) {
-  LinAct.rotate(100, Dir);
-  LinActMotionStartTime = millis();
-  LinActMotionDurationMs = DurationMs;
-}
-
-void serveMotionCommand(class CommandArgs &Args, int const Dir) {
+void serveMotionCommand(class CommandArgs &Args,
+                        LinearActuator::Direction const Dir) {
   if (!Args.hasNext())
     return;
 
-  unsigned int DurationMs = Args.next().toInt();
-  DurationMs =
-      constrain(DurationMs, LIN_ACT_MIN_MOVE_DURATION_MS,
+  unsigned int const DurationMs =
+      constrain(Args.next().toInt(), LIN_ACT_MIN_MOVE_DURATION_MS,
                 LIN_ACT_MAX_MOVE_DURATION_MS);
-
-  moveLinearActuator(DurationMs, Dir);
+  LinAct.move(DurationMs, Dir);
 }
 
 void serveExtendCommand(class CommandArgs &Args) {
-  serveMotionCommand(Args, LAD_Extend);
+  serveMotionCommand(Args, LinearActuator::Direction::Out);
 }
 
 void serveRetractCommand(class CommandArgs &Args) {
-  serveMotionCommand(Args, LAD_Retract);
+  serveMotionCommand(Args, LinearActuator::Direction::In);
 }
 
-void stopLinearActuator() {
-  LinAct.stop();
-  LinActMotionDurationMs = 0;
-}
-
-void serveStopCommand(class CommandArgs &Args) { stopLinearActuator(); }
+void serveStopCommand(class CommandArgs &Args) { LinAct.stop(); }
 
 void serveCommand(String const &Name, class CommandArgs &Args) {
   if (Name == "g")
@@ -227,10 +265,7 @@ void serveIncomingCommand() {
 
 void loop() {
   IMU.update();
-
-  if ((LinActMotionDurationMs > 0) &&
-      ((millis() - LinActMotionStartTime) > LinActMotionDurationMs))
-    stopLinearActuator();
+  LinAct.update();
 
   if (Serial.available() > 0)
     serveIncomingCommand();
