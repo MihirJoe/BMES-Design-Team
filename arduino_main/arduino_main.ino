@@ -5,6 +5,8 @@
 #define SERIAL_BAUD 9600
 #define SERIAL_TIMEOUT_MS 500
 
+#define COMMAND_BUF_LEN 128
+
 #define SCALE_DOUT_PIN 9
 #define SCALE_SCK_PIN 10
 
@@ -153,31 +155,6 @@ void setup() {
   // Serial.println();
 }
 
-class CommandArgs {
-  String S;
-
-public:
-  CommandArgs(String S) : S{S} {}
-
-  bool hasNext() const { return this->S.length() > 0; }
-
-  String next() {
-    String Next;
-
-    int const CommaIdx = this->S.indexOf(',');
-    if (CommaIdx == -1) {
-      Next = this->S;
-      this->S = String();
-    } else {
-      Next = this->S.substring(0, CommaIdx);
-      this->S = this->S.substring(CommaIdx + 1);
-    }
-
-    Next.trim();
-    return Next;
-  }
-};
-
 struct Angles measureAverageAngles() {
   // sumX = 0;
   // sumY = 0;
@@ -207,7 +184,7 @@ struct Angles measureAverageAngles() {
   return result;
 }
 
-void serveMeasureCommand(class CommandArgs &Args) {
+void serveMeasureCommand(char const *const Args) {
   float const force = Scale.get_units(); // get force
   Angles const avgAngles = measureAverageAngles();
 
@@ -218,48 +195,57 @@ void serveMeasureCommand(class CommandArgs &Args) {
   Serial.println();
 }
 
-void serveMotionCommand(class CommandArgs &Args,
+void serveMotionCommand(char const *const Args,
                         LinearActuator::Direction const Dir) {
-  if (!Args.hasNext())
+  unsigned int DurationMs;
+  if (sscanf(Args, "%u", &DurationMs) != 1)
     return;
 
-  unsigned int const DurationMs =
-      constrain(Args.next().toInt(), LIN_ACT_MIN_MOVE_DURATION_MS,
-                LIN_ACT_MAX_MOVE_DURATION_MS);
+  DurationMs = constrain(DurationMs, LIN_ACT_MIN_MOVE_DURATION_MS,
+                         LIN_ACT_MAX_MOVE_DURATION_MS);
   LinAct.move(DurationMs, Dir);
 }
 
-void serveExtendCommand(class CommandArgs &Args) {
+void serveExtendCommand(char const *const Args) {
   serveMotionCommand(Args, LinearActuator::Direction::Out);
 }
 
-void serveRetractCommand(class CommandArgs &Args) {
+void serveRetractCommand(char const *const Args) {
   serveMotionCommand(Args, LinearActuator::Direction::In);
 }
 
-void serveStopCommand(class CommandArgs &Args) { LinAct.stop(); }
+void serveStopCommand(char const *const Args) { LinAct.stop(); }
 
-void serveCommand(String const &Name, class CommandArgs &Args) {
-  if (Name == "g")
+void serveCommand(char const Name, char const *const Args) {
+  switch (Name) {
+  case 'g':
     serveMeasureCommand(Args);
-  else if (Name == "e")
+    break;
+  case 'e':
     serveExtendCommand(Args);
-  else if (Name == "r")
+    break;
+  case 'r':
     serveRetractCommand(Args);
-  else if (Name == "s")
+    break;
+  case 's':
     serveStopCommand(Args);
+    break;
+  }
 }
 
 void serveIncomingCommand() {
-  String const Cmd = Serial.readStringUntil('\n');
-  if (!Cmd)
+  static char CmdBuf[COMMAND_BUF_LEN];
+
+  size_t const BytesRead =
+      Serial.readBytesUntil('\n', CmdBuf, COMMAND_BUF_LEN - 1);
+  CmdBuf[BytesRead] = 0;
+
+  char Name;
+  size_t ArgsOff;
+  if (sscanf(CmdBuf, " %c%zn", &Name, &ArgsOff) != 1)
     return;
 
-  CommandArgs Args(Cmd);
-  if (!Args.hasNext())
-    return;
-
-  String const Name = Args.next();
+  char const *const Args = CmdBuf + ArgsOff;
   serveCommand(Name, Args);
 }
 
