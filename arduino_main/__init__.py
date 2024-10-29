@@ -31,8 +31,7 @@ class Arduino:
         self.serial.close()  # Always close the connection when done
 
     def _send_command(self, command: str):
-        self.serial.write(command.encode("utf-8"))  # Send the command to Arduino
-        self.serial.write(b"\n")
+        self.serial.write((command + "\n").encode("utf-8"))
         time.sleep(0.1)  # Wait for Arduino to process the command
 
     def send_measure_command(self):
@@ -43,10 +42,10 @@ class Arduino:
         return map(float, resp.strip().split(","))
 
     def send_extend_command(self, duration_ms: int):
-        self._send_command(f"e,{duration_ms}")
+        self._send_command(f"e{duration_ms}")
 
     def send_retract_command(self, duration_ms: int):
-        self._send_command(f"r,{duration_ms}")
+        self._send_command(f"r{duration_ms}")
 
     def send_stop_command(self):
         self._send_command("s")
