@@ -45,6 +45,18 @@ void setupSerial() {
   Serial.setTimeout(SERIAL_TIMEOUT_MS);
 }
 
+enum LinearActuatorDirection {
+  LAD_Retract = 0,
+  LAD_Extend = 1,
+};
+
+void setupLinearActuator() {
+  LinAct.begin();
+  LinAct.rotate(100, LAD_Retract);
+  delay(LIN_ACT_MAX_MOVE_DURATION_MS);
+  LinAct.stop();
+}
+
 void setupScale() {
   Scale.begin(SCALE_DOUT_PIN, SCALE_SCK_PIN);
   Scale.set_scale();
@@ -70,15 +82,13 @@ void setupIMU() {
   // Serial.println("Calculating offsets complete.");
 }
 
-void setupLinearActuator() { LinAct.begin(); }
-
 void setup() {
   setupSerial();
+  setupLinearActuator();
   setupScale();
   // Serial.println("Setting up IMU...");
   setupIMU();
   // Serial.println("IMU setup complete.");
-  setupLinearActuator();
 
   delay(1000);
   Serial.print("a");
@@ -161,11 +171,6 @@ void serveMeasureCommand(class CommandArgs &Args) {
   Serial.print(force);
   Serial.println();
 }
-
-enum LinearActuatorDirection {
-  LAD_Retract = 0,
-  LAD_Extend = 1,
-};
 
 void moveLinearActuator(unsigned int const DurationMs,
                         int const Dir) {
