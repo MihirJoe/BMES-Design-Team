@@ -166,7 +166,7 @@ void serveMeasureCommand(class CommandArgs &Args) {
   Angles const avgAngles = measureAverageAngles();
 
   Serial.print(
-      avgAngles.angleX); // update based on calibration factor and calcuation
+      avgAngles.angleZ); // update based on calibration factor and calcuation
   Serial.print(",");
   Serial.print(force);
   Serial.println();
