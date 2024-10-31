@@ -21,6 +21,8 @@ class Arduino:
 
         self.serial.timeout = 1
 
+        time.sleep(5)
+
     def __enter__(self):
         return self
 
