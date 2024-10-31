@@ -13,7 +13,7 @@
 
 #define LIN_ACT_RPWM_PIN 3 // output
 #define LIN_ACT_R_EN_PIN 2 // input
-#define LIN_ACT_R_IS_PIN 5 // output
+#define LIN_ACT_R_IS_PIN 1 // output
 
 #define LIN_ACT_LPWM_PIN 6 // output
 #define LIN_ACT_L_EN_PIN 5 // input
