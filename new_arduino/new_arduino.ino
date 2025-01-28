@@ -65,19 +65,12 @@ private:
   }
 
   void actuate(Direction const Dir) {
-    int ActivePwmPin;
-    int InactivePwmPin;
+    static int ACTIVE_PWM_PIN_FOR_DIR[2] = {
+        /* Direction::In */ LIN_ACT_LPWM_PIN,
+        /* Direction::Out */ LIN_ACT_RPWM_PIN};
 
-    switch (Dir) {
-    case Direction::In:
-      ActivePwmPin = LIN_ACT_LPWM_PIN;
-      InactivePwmPin = LIN_ACT_RPWM_PIN;
-      break;
-    case Direction::Out:
-      ActivePwmPin = LIN_ACT_RPWM_PIN;
-      InactivePwmPin = LIN_ACT_LPWM_PIN;
-      break;
-    }
+    int const ActivePwmPin = ACTIVE_PWM_PIN_FOR_DIR[static_cast<int>(Dir)];
+    int const InactivePwmPin = ACTIVE_PWM_PIN_FOR_DIR[!static_cast<int>(Dir)];
 
     analogWrite(ActivePwmPin, 0xff);
     digitalWrite(InactivePwmPin, LOW);
