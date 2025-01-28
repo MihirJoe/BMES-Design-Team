@@ -54,7 +54,7 @@ public:
 
 private:
   unsigned long MotionStartTime{0};
-  unsigned int MotionDurationMs{0};
+  unsigned long MotionDurationMs{0};
 
   void configurePins() {
     pinMode(LIN_ACT_R_EN_PIN, OUTPUT);
@@ -98,7 +98,7 @@ public:
       this->stop();
   }
 
-  void move(unsigned int const DurationMs, Direction const Dir) {
+  void move(unsigned long const DurationMs, Direction const Dir) {
     this->actuate(Dir);
     this->MotionStartTime = millis();
     this->MotionDurationMs = DurationMs;
