@@ -72,7 +72,7 @@ private:
     int const ActivePwmPin = ACTIVE_PWM_PIN_FOR_DIR[static_cast<int>(Dir)];
     int const InactivePwmPin = ACTIVE_PWM_PIN_FOR_DIR[!static_cast<int>(Dir)];
 
-    analogWrite(ActivePwmPin, 0xff);
+    digitalWrite(ActivePwmPin, HIGH);
     digitalWrite(InactivePwmPin, LOW);
 
     // Enable the motor.
