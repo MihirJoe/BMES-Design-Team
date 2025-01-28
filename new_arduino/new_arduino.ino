@@ -104,6 +104,14 @@ public:
     this->MotionDurationMs = DurationMs;
   }
 
+  void extend(unsigned long const DurationMs) {
+    this->move(DurationMs, Direction::Out);
+  }
+
+  void retract(unsigned long const DurationMs) {
+    this->move(DurationMs, Direction::In);
+  }
+
   void home() {
     this->actuate(Direction::In);
     delay(LIN_ACT_MAX_MOVE_DURATION_MS);
@@ -172,10 +180,10 @@ static void handleCommand(int ch) {
     Measuring = true;
     break;
   case 'e':
-    LinAct.move(1000, LinearActuator::Direction::Out);
+    LinAct.extend(200);
     break;
   case 'r':
-    LinAct.move(1000, LinearActuator::Direction::In);
+    LinAct.retract(200);
     break;
   }
 }
