@@ -1,15 +1,23 @@
 #include "interact.h"
 
+#include "proto.h"
+
 #include <adapt/proto.h>
 
 #include <unistd.h>
 
+#include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define INTERACT_INPUT_BUF_LEN 32
+#define INTERACT_INPUT_BUF_SIZE 32
+
+#define INTERACT_OK_RESULT                                                     \
+  ((struct adptc_interact_result){.kind = adptc_interact_RK_Ok})
+#define INTERACT_OTHER_RESULT(variant)                                         \
+  ((struct adptc_interact_result){.kind = adptc_interact_RK_##variant})
 
 struct request_def {
   char const *name;
@@ -17,33 +25,56 @@ struct request_def {
 };
 
 static struct request_def const request_defs[] = {
-    {.name = "ela16", .code = AdaptRC_ExtendLinAct16},
-    {.name = "ela512", .code = AdaptRC_ExtendLinAct512},
-    {.name = "sla", .code = AdaptRC_StopLinAct},
-    {.name = "sm", .code = AdaptRC_SetMeasuring},
-    {.name = "rla16", .code = AdaptRC_RetractLinAct16},
-    {.name = "rla512", .code = AdaptRC_RetractLinAct512},
+    {.name = "ela8", .code = adpt_proto_RC_ExtendLinAct8},
+    {.name = "ela512", .code = adpt_proto_RC_ExtendLinAct512},
+    {.name = "sla", .code = adpt_proto_RC_StopLinAct},
+    {.name = "sm", .code = adpt_proto_RC_SetMeasuring},
+    {.name = "rla8", .code = adpt_proto_RC_RetractLinAct8},
+    {.name = "rla512", .code = adpt_proto_RC_RetractLinAct512},
 };
+
+char const *
+adptc_interact_result_kind_to_str(enum adptc_interact_result_kind const kind) {
+  switch (kind) {
+  case adptc_interact_RK_Ok:
+    return "OK";
+  case adptc_interact_RK_FgetsError:
+    return "fgets() failed";
+  default:
+    return NULL;
+  }
+}
+
+void adptc_interact_print_result(FILE *const out,
+                                 struct adptc_interact_result const res) {
+  char const *const kind_str = adptc_interact_result_kind_to_str(res.kind);
+  assert(kind_str);
+
+  fprintf(out, "%s", kind_str);
+}
 
 static void process_line(int const serial_fd, char const *const Line) {
   for (size_t I = 0; I < sizeof(request_defs) / sizeof(request_defs[0]); I++) {
     struct request_def const *const def = &request_defs[I];
-    size_t const ReqNameLen = strlen(def->name);
-    if (strncmp(Line, def->name, ReqNameLen) != 0)
+    size_t const req_name_len = strlen(def->name);
+    if (strncmp(Line, def->name, req_name_len) != 0)
       continue;
 
-    unsigned long const ReqBody = strtoul(Line + ReqNameLen, NULL, 0);
-    unsigned char Req = (def->code << 5) | (ReqBody & 0x1f);
-    printf("request: %02x\n", Req);
-    write(serial_fd, &Req, 1);
+    unsigned long const req_body = strtoul(Line + req_name_len, NULL, 0);
+    unsigned char const req = adptc_proto_build_request(def->code, req_body);
+    adptc_proto_try_send_request(serial_fd, req);
 
     break;
   }
 }
 
-void adapt_client_interact_main(
-    struct adapt_client_interact_context const ctx) {
-  char input_buf[INTERACT_INPUT_BUF_LEN];
+struct adptc_interact_result adptc_interact_loop(int const serial_fd) {
+  char input_buf[INTERACT_INPUT_BUF_SIZE];
   while (fgets(input_buf, sizeof(input_buf), stdin))
-    process_line(ctx.serial_fd, input_buf);
+    process_line(serial_fd, input_buf);
+
+  if (ferror(stdin))
+    return INTERACT_OTHER_RESULT(FgetsError);
+
+  return INTERACT_OK_RESULT;
 }

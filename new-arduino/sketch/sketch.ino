@@ -8,7 +8,7 @@
 /// \brief The HX711 scale.
 static HX711 Hx711;
 /// \brief The linear actuator.
-static as::LinearActuator LinAct;
+static adpts::LinearActuator LinAct;
 
 static bool AreMeasuring = false;
 
@@ -17,37 +17,37 @@ static void reportStatus(AdaptStatusCode const Code) {
   Serial.flush();
 }
 
-static void setupSerial() { Serial.begin(ADAPT_SERIAL_BAUD); }
+static void setupSerial() { Serial.begin(ADPT_PROTO_SERIAL_BAUD); }
 
 static void setupLinearActuator() {
-  reportStatus(AdaptSC_SettingUpLinAct);
+  reportStatus(adpt_proto_SC_SettingUpLinAct);
   LinAct.begin();
   LinAct.home();
-  reportStatus(AdaptSC_Done);
+  reportStatus(adpt_proto_SC_Done);
 }
 
 static void setupHx711() {
-  reportStatus(AdaptSC_SettingUpHx711);
-  Hx711.begin(ADAPT_HX711_DOUT_PIN, ADAPT_HX711_SCK_PIN);
+  reportStatus(adpt_proto_SC_SettingUpHx711);
+  Hx711.begin(ADPTS_HX711_DOUT_PIN, ADPTS_HX711_SCK_PIN);
   Hx711.set_scale();
   Hx711.tare();                       // Reset the scale to 0
   Hx711.read_average();               // Get a baseline reading
-  Hx711.set_scale(ADAPT_HX711_SCALE); // Adjust to this calibration
+  Hx711.set_scale(ADPTS_HX711_SCALE); // Adjust to this calibration
                                       // factor for force
-  reportStatus(AdaptSC_Done);
+  reportStatus(adpt_proto_SC_Done);
 }
 
 void setup() {
   setupSerial();
   setupLinearActuator();
   setupHx711();
-  reportStatus(AdaptSC_Ready);
+  reportStatus(adpt_proto_SC_Ready);
 }
 
 static void measure() {
   float const Force = Hx711.get_units();
 
-  reportStatus(AdaptSC_ForceMeasurement);
+  reportStatus(adpt_proto_SC_ForceMeasurement);
   for (size_t I = 0; I < sizeof(Force); I++)
     Serial.write(reinterpret_cast<unsigned char const *>(&Force)[I]);
 
@@ -70,16 +70,16 @@ durationMsForMoveLinActRequest(byte const ReqBody,
   return TimeUnit * (1 + static_cast<unsigned long>(ReqBody));
 }
 
-static void serveExtendLinAct16Request(byte const Body) {
-  LinAct.extend(durationMsForMoveLinActRequest(Body, 16));
+static void serveExtendLinAct8Request(byte const Body) {
+  LinAct.extend(durationMsForMoveLinActRequest(Body, 8));
 }
 
 static void serveExtendLinAct512Request(byte const Body) {
   LinAct.extend(durationMsForMoveLinActRequest(Body, 512));
 }
 
-static void serveRetractLinAct16Request(byte const Body) {
-  LinAct.retract(durationMsForMoveLinActRequest(Body, 16));
+static void serveRetractLinAct8Request(byte const Body) {
+  LinAct.retract(durationMsForMoveLinActRequest(Body, 8));
 }
 
 static void serveRetractLinAct512Request(byte const Body) {
@@ -90,11 +90,11 @@ static void serveNullRequest(byte const Body) {}
 
 static void serveRequest(byte const Req) {
   static void (*HandlerForCode[8])(byte) = {
-      /* ExtendLinAct16 */ serveExtendLinAct16Request,
+      /* ExtendLinAct8 */ serveExtendLinAct8Request,
       /* ExtendLinAct512 */ serveExtendLinAct512Request,
       /* StopLinAct */ serveStopLinActRequest,
       /* SetMeasuring */ serveSetMeasuringRequest,
-      /* RetractLinAct16*/ serveRetractLinAct16Request,
+      /* RetractLinAct8*/ serveRetractLinAct8Request,
       /* RetractLinAct512 */ serveRetractLinAct512Request,
       serveNullRequest,
       serveNullRequest,
@@ -115,7 +115,7 @@ void loop() {
 
   int const Ch = Serial.read();
   if (Ch >= 0) {
-    reportStatus(AdaptSC_ReceivedRequest);
+    reportStatus(adpt_proto_SC_ReceivedRequest);
     serveRequest(Ch);
   }
 }

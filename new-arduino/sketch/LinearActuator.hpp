@@ -1,9 +1,9 @@
 #ifndef ADAPT_SKETCH_LINEARACTUATOR_HPP
 #define ADAPT_SKETCH_LINEARACTUATOR_HPP
 
-#include "config.h"
+#include "config.hpp"
 
-namespace as {
+namespace adpts {
 
 /// \brief The linear actuator.
 class LinearActuator {
@@ -24,11 +24,11 @@ private:
   unsigned long MotionDurationMs{0};
 
   void configurePins() {
-    pinMode(ADAPT_LIN_ACT_L_EN_PIN, OUTPUT);
-    pinMode(ADAPT_LIN_ACT_R_EN_PIN, OUTPUT);
+    pinMode(ADPTS_LIN_ACT_L_EN_PIN, OUTPUT);
+    pinMode(ADPTS_LIN_ACT_R_EN_PIN, OUTPUT);
 
-    pinMode(ADAPT_LIN_ACT_LPWM_PIN, OUTPUT);
-    pinMode(ADAPT_LIN_ACT_RPWM_PIN, OUTPUT);
+    pinMode(ADPTS_LIN_ACT_LPWM_PIN, OUTPUT);
+    pinMode(ADPTS_LIN_ACT_RPWM_PIN, OUTPUT);
   }
 
   bool motionIsComplete() const {
@@ -37,9 +37,9 @@ private:
 
   void move(unsigned long const DurationMs, Direction const Dir) {
     static int const ActivePwmPinMap[2] = {/* In */
-                                           ADAPT_LIN_ACT_LPWM_PIN,
+                                           ADPTS_LIN_ACT_LPWM_PIN,
                                            /* Out */
-                                           ADAPT_LIN_ACT_RPWM_PIN};
+                                           ADPTS_LIN_ACT_RPWM_PIN};
 
     int const ActivePwmPin = ActivePwmPinMap[static_cast<int>(Dir)];
     int const InactivePwmPin = ActivePwmPinMap[!static_cast<int>(Dir)];
@@ -47,8 +47,8 @@ private:
     digitalWrite(InactivePwmPin, LOW);
     digitalWrite(ActivePwmPin, HIGH);
 
-    digitalWrite(ADAPT_LIN_ACT_L_EN_PIN, HIGH);
-    digitalWrite(ADAPT_LIN_ACT_R_EN_PIN, HIGH);
+    digitalWrite(ADPTS_LIN_ACT_L_EN_PIN, HIGH);
+    digitalWrite(ADPTS_LIN_ACT_R_EN_PIN, HIGH);
 
     this->MotionStartTime = millis();
     this->MotionDurationMs = DurationMs;
@@ -72,22 +72,22 @@ public:
     this->move(DurationMs, Direction::In);
   }
 
-  void home() { this->retract(ADAPT_LIN_ACT_STROKE_DURATION_MS); }
+  void home() { this->retract(ADPTS_LIN_ACT_STROKE_DURATION_MS); }
 
   void stop() {
     // Inhibit the half-bridges.
-    digitalWrite(ADAPT_LIN_ACT_L_EN_PIN, LOW);
-    digitalWrite(ADAPT_LIN_ACT_R_EN_PIN, LOW);
+    digitalWrite(ADPTS_LIN_ACT_L_EN_PIN, LOW);
+    digitalWrite(ADPTS_LIN_ACT_R_EN_PIN, LOW);
 
     // Zero the input to the half-bridges, to be safe.
-    digitalWrite(ADAPT_LIN_ACT_LPWM_PIN, LOW);
-    digitalWrite(ADAPT_LIN_ACT_RPWM_PIN, LOW);
+    digitalWrite(ADPTS_LIN_ACT_LPWM_PIN, LOW);
+    digitalWrite(ADPTS_LIN_ACT_RPWM_PIN, LOW);
 
     // End the motion.
     this->MotionDurationMs = 0;
   }
 };
 
-} // namespace as
+} // namespace adpts
 
 #endif // ADAPT_SKETCH_LINEARACTUATOR_HPP
