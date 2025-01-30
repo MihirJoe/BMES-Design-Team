@@ -5,13 +5,13 @@
 
 #include <stdio.h>
 
-#define ADPTC_PROTO_IS_OK(res) (res.kind == adptc_proto_RK_Ok)
-#define ADPTC_PROTO_IS_ERROR(res) (res.kind != adptc_proto_RK_Ok)
+#define ADPTC_PROTO_IS_OK(res) (res.kind == adptc_proto_rk_ok)
+#define ADPTC_PROTO_IS_ERROR(res) (res.kind != adptc_proto_rk_ok)
 
 enum adptc_proto_result_kind {
-  adptc_proto_RK_Ok,
-  adptc_proto_RK_WriteError,
-  adptc_proto_RK_PartialWrite,
+  adptc_proto_rk_ok,
+  adptc_proto_rk_write_error,
+  adptc_proto_rk_partial_write,
 };
 
 struct adptc_proto_result {

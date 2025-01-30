@@ -9,29 +9,29 @@
 #include <string.h>
 
 #define PROTO_OK_RESULT                                                        \
-  ((struct adptc_proto_result){.kind = adptc_proto_RK_Ok, .code = 0})
+  ((struct adptc_proto_result){.kind = adptc_proto_rk_ok, .code = 0})
 #define PROTO_OS_ERROR_RESULT(variant)                                         \
-  ((struct adptc_proto_result){.kind = adptc_proto_RK_##variant, .code = errno})
+  ((struct adptc_proto_result){.kind = adptc_proto_rk_##variant, .code = errno})
 #define PROTO_OTHER_RESULT(variant)                                            \
-  ((struct adptc_proto_result){.kind = adptc_proto_RK_##variant, .code = 0})
+  ((struct adptc_proto_result){.kind = adptc_proto_rk_##variant, .code = 0})
 
 static char const *const status_code_to_str[256] = {
-    [adpt_proto_SC_ForceMeasurement] = "force measurement.",
-    [adpt_proto_SC_RequestReceived] = "request received.",
-    [adpt_proto_SC_Done] = "done.",
-    [adpt_proto_SC_Ready] = "ready.",
-    [adpt_proto_SC_SettingUpLinAct] = "setting up linear actuator...",
-    [adpt_proto_SC_SettingUpHx711] = "setting up HX711...",
+    [adpt_proto_sc_force_measurement] = "force measurement.",
+    [adpt_proto_sc_request_received] = "request received.",
+    [adpt_proto_sc_done] = "done.",
+    [adpt_proto_sc_ready] = "ready.",
+    [adpt_proto_sc_setting_up_lin_act] = "setting up linear actuator...",
+    [adpt_proto_sc_setting_up_hx711] = "setting up HX711...",
 };
 
 char const *
 adptc_proto_result_kind_to_str(enum adptc_proto_result_kind const kind) {
   switch (kind) {
-  case adptc_proto_RK_Ok:
+  case adptc_proto_rk_ok:
     return "OK";
-  case adptc_proto_RK_WriteError:
+  case adptc_proto_rk_write_error:
     return "write() failed";
-  case adptc_proto_RK_PartialWrite:
+  case adptc_proto_rk_partial_write:
     return "partial write";
   default:
     return NULL;
@@ -61,9 +61,9 @@ struct adptc_proto_result
 adptc_proto_try_send_request(int const fd, unsigned char const req) {
   ssize_t const write_res = write(fd, &req, 1);
   if (write_res == -1)
-    return PROTO_OS_ERROR_RESULT(WriteError);
+    return PROTO_OS_ERROR_RESULT(write_error);
   if (write_res == 0)
-    return PROTO_OTHER_RESULT(PartialWrite);
+    return PROTO_OTHER_RESULT(partial_write);
 
   assert(write_res == 1);
 

@@ -19,23 +19,23 @@
 #endif
 
 #define SERIAL_OK_RESULT                                                       \
-  ((struct adptc_serial_result){.kind = adptc_serial_RK_Ok, .code = 0})
+  ((struct adptc_serial_result){.kind = adptc_serial_rk_ok, .code = 0})
 #define SERIAL_OS_ERROR_RESULT(variant)                                        \
-  ((struct adptc_serial_result){.kind = adptc_serial_RK_##variant,             \
+  ((struct adptc_serial_result){.kind = adptc_serial_rk_##variant,             \
                                 .code = errno})
 
 char const *
 adptc_serial_result_kind_to_str(enum adptc_serial_result_kind const kind) {
   switch (kind) {
-  case adptc_serial_RK_Ok:
+  case adptc_serial_rk_ok:
     return "OK";
-  case adptc_serial_RK_GetAttrError:
+  case adptc_serial_rk_getattr_error:
     return "tcgetattr() failed";
-  case adptc_serial_RK_SetInSpeedError:
+  case adptc_serial_rk_setispeed_error:
     return "cfsetispeed() failed";
-  case adptc_serial_RK_SetOutSpeedError:
+  case adptc_serial_rk_setospeed_error:
     return "cfsetospeed() failed";
-  case adptc_serial_RK_SetAttrError:
+  case adptc_serial_rk_setattr_error:
     return "tcsetattr() failed";
   default:
     return NULL;
@@ -55,7 +55,7 @@ void adptc_serial_print_result(FILE *const out,
 static struct adptc_serial_result try_get_attr(int const fd,
                                                struct termios *const tty) {
   if (tcgetattr(fd, tty) == -1)
-    return SERIAL_OS_ERROR_RESULT(GetAttrError);
+    return SERIAL_OS_ERROR_RESULT(getattr_error);
 
   return SERIAL_OK_RESULT;
 }
@@ -106,9 +106,9 @@ static void configure_special_chars(cc_t cc[]) {
 
 static struct adptc_serial_result try_set_speed(struct termios *const tty) {
   if (cfsetispeed(tty, SERIAL_SPEED) == -1)
-    return SERIAL_OS_ERROR_RESULT(SetInSpeedError);
+    return SERIAL_OS_ERROR_RESULT(setispeed_error);
   if (cfsetospeed(tty, SERIAL_SPEED) == -1)
-    return SERIAL_OS_ERROR_RESULT(SetOutSpeedError);
+    return SERIAL_OS_ERROR_RESULT(setospeed_error);
 
   return SERIAL_OK_RESULT;
 }
@@ -116,7 +116,7 @@ static struct adptc_serial_result try_set_speed(struct termios *const tty) {
 static struct adptc_serial_result try_set_attr(int const fd,
                                                struct termios *const tty) {
   if (tcsetattr(fd, TCSANOW, tty) == -1)
-    return SERIAL_OS_ERROR_RESULT(SetAttrError);
+    return SERIAL_OS_ERROR_RESULT(setattr_error);
 
   // From `man 3 termios`:
   //   Note that tcsetattr() returns success if any of the requested

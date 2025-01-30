@@ -7,15 +7,15 @@
 
 #include <stdio.h>
 
-#define ADPTC_SERIAL_IS_OK(res) (res.kind == adptc_serial_RK_Ok)
-#define ADPTC_SERIAL_IS_ERROR(res) (res.kind != adptc_serial_RK_Ok)
+#define ADPTC_SERIAL_IS_OK(res) (res.kind == adptc_serial_rk_ok)
+#define ADPTC_SERIAL_IS_ERROR(res) (res.kind != adptc_serial_rk_ok)
 
 enum adptc_serial_result_kind {
-  adptc_serial_RK_Ok,
-  adptc_serial_RK_GetAttrError,
-  adptc_serial_RK_SetInSpeedError,
-  adptc_serial_RK_SetOutSpeedError,
-  adptc_serial_RK_SetAttrError,
+  adptc_serial_rk_ok,
+  adptc_serial_rk_getattr_error,
+  adptc_serial_rk_setispeed_error,
+  adptc_serial_rk_setospeed_error,
+  adptc_serial_rk_setattr_error,
 };
 
 struct adptc_serial_result {

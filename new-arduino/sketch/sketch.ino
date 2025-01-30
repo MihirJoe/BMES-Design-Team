@@ -20,34 +20,34 @@ static void reportStatus(AdaptStatusCode const Code) {
 static void setupSerial() { Serial.begin(ADPT_PROTO_SERIAL_BAUD); }
 
 static void setupLinearActuator() {
-  reportStatus(adpt_proto_SC_SettingUpLinAct);
+  reportStatus(adpt_proto_sc_setting_up_lin_act);
   LinAct.begin();
   LinAct.home();
-  reportStatus(adpt_proto_SC_Done);
+  reportStatus(adpt_proto_sc_done);
 }
 
 static void setupHx711() {
-  reportStatus(adpt_proto_SC_SettingUpHx711);
+  reportStatus(adpt_proto_sc_setting_up_hx711);
   Hx711.begin(ADPTS_HX711_DOUT_PIN, ADPTS_HX711_SCK_PIN);
   Hx711.set_scale();
   Hx711.tare();                       // Reset the scale to 0
   Hx711.read_average();               // Get a baseline reading
   Hx711.set_scale(ADPTS_HX711_SCALE); // Adjust to this calibration
                                       // factor for force
-  reportStatus(adpt_proto_SC_Done);
+  reportStatus(adpt_proto_sc_done);
 }
 
 void setup() {
   setupSerial();
   setupLinearActuator();
   setupHx711();
-  reportStatus(adpt_proto_SC_Ready);
+  reportStatus(adpt_proto_sc_ready);
 }
 
 static void measure() {
   float const Force = Hx711.get_units();
 
-  reportStatus(adpt_proto_SC_ForceMeasurement);
+  reportStatus(adpt_proto_sc_force_measurement);
   for (size_t I = 0; I < sizeof(Force); I++)
     Serial.write(reinterpret_cast<unsigned char const *>(&Force)[I]);
 
@@ -115,7 +115,7 @@ void loop() {
 
   int const Ch = Serial.read();
   if (Ch >= 0) {
-    reportStatus(adpt_proto_SC_ReceivedRequest);
+    reportStatus(adpt_proto_sc_request_received);
     serveRequest(Ch);
   }
 }

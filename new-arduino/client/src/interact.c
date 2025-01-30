@@ -15,9 +15,9 @@
 #define INTERACT_INPUT_BUF_SIZE 32
 
 #define INTERACT_OK_RESULT                                                     \
-  ((struct adptc_interact_result){.kind = adptc_interact_RK_Ok})
+  ((struct adptc_interact_result){.kind = adptc_interact_rk_ok})
 #define INTERACT_OTHER_RESULT(variant)                                         \
-  ((struct adptc_interact_result){.kind = adptc_interact_RK_##variant})
+  ((struct adptc_interact_result){.kind = adptc_interact_rk_##variant})
 
 struct request_def {
   char const *name;
@@ -25,20 +25,20 @@ struct request_def {
 };
 
 static struct request_def const request_defs[] = {
-    {.name = "ela8", .code = adpt_proto_RC_ExtendLinAct8},
-    {.name = "ela512", .code = adpt_proto_RC_ExtendLinAct512},
-    {.name = "sla", .code = adpt_proto_RC_StopLinAct},
-    {.name = "sm", .code = adpt_proto_RC_SetMeasuring},
-    {.name = "rla8", .code = adpt_proto_RC_RetractLinAct8},
-    {.name = "rla512", .code = adpt_proto_RC_RetractLinAct512},
+    {.name = "ela8", .code = adpt_proto_rc_extend_lin_act_8},
+    {.name = "ela512", .code = adpt_proto_rc_extend_lin_act_512},
+    {.name = "sla", .code = adpt_proto_rc_stop_lin_act},
+    {.name = "sm", .code = adpt_proto_rc_set_measuring},
+    {.name = "rla8", .code = adpt_proto_rc_retract_lin_act_8},
+    {.name = "rla512", .code = adpt_proto_rc_retract_lin_act_512},
 };
 
 char const *
 adptc_interact_result_kind_to_str(enum adptc_interact_result_kind const kind) {
   switch (kind) {
-  case adptc_interact_RK_Ok:
+  case adptc_interact_rk_ok:
     return "OK";
-  case adptc_interact_RK_FgetsError:
+  case adptc_interact_rk_fgets_error:
     return "fgets() failed";
   default:
     return NULL;
@@ -74,7 +74,7 @@ struct adptc_interact_result adptc_interact_loop(int const serial_fd) {
     process_line(serial_fd, input_buf);
 
   if (ferror(stdin))
-    return INTERACT_OTHER_RESULT(FgetsError);
+    return INTERACT_OTHER_RESULT(fgets_error);
 
   return INTERACT_OK_RESULT;
 }

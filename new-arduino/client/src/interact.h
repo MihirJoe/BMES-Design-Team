@@ -3,12 +3,12 @@
 
 #include <stdio.h>
 
-#define ADPTC_INTERACT_IS_OK(res) (res.kind == adptc_interact_RK_Ok)
-#define ADPTC_INTERACT_IS_ERROR(res) (res.kind != adptc_interact_RK_Ok)
+#define ADPTC_INTERACT_IS_OK(res) (res.kind == adptc_interact_rk_ok)
+#define ADPTC_INTERACT_IS_ERROR(res) (res.kind != adptc_interact_rk_ok)
 
 enum adptc_interact_result_kind {
-  adptc_interact_RK_Ok,
-  adptc_interact_RK_FgetsError,
+  adptc_interact_rk_ok,
+  adptc_interact_rk_fgets_error,
 };
 
 struct adptc_interact_result {
