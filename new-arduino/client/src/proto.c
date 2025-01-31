@@ -1,19 +1,15 @@
 #include "proto.h"
 
+#include "result.h"
+#include "support.h"
+
+#include <adapt/proto.h>
+
 #include <unistd.h>
 
 #include <assert.h>
-#include <errno.h>
+#include <limits.h>
 #include <math.h>
-#include <stdio.h>
-#include <string.h>
-
-#define PROTO_OK_RESULT                                                        \
-  ((struct adptc_proto_result){.kind = adptc_proto_rk_ok, .code = 0})
-#define PROTO_OS_ERROR_RESULT(variant)                                         \
-  ((struct adptc_proto_result){.kind = adptc_proto_rk_##variant, .code = errno})
-#define PROTO_OTHER_RESULT(variant)                                            \
-  ((struct adptc_proto_result){.kind = adptc_proto_rk_##variant, .code = 0})
 
 static char const *const status_code_to_str[256] = {
     [adpt_proto_sc_force_measurement] = "force measurement.",
@@ -24,32 +20,9 @@ static char const *const status_code_to_str[256] = {
     [adpt_proto_sc_setting_up_hx711] = "setting up HX711...",
 };
 
-char const *
-adptc_proto_result_kind_to_str(enum adptc_proto_result_kind const kind) {
-  switch (kind) {
-  case adptc_proto_rk_ok:
-    return "OK";
-  case adptc_proto_rk_write_error:
-    return "write() failed";
-  case adptc_proto_rk_partial_write:
-    return "partial write";
-  default:
-    return NULL;
-  }
-}
-
-void adptc_proto_print_result(FILE *const out,
-                              struct adptc_proto_result const res) {
-  char const *const kind_str = adptc_proto_result_kind_to_str(res.kind);
-  assert(kind_str);
-
-  fprintf(out, "%s", kind_str);
-  if (res.code != 0)
-    fprintf(out, ": %s", strerror(res.code));
-}
-
 char const *adptc_proto_status_code_to_str(unsigned char const code) {
-  return status_code_to_str[code];
+  char const *s = status_code_to_str[code & 0xff];
+  return s ? s : "(unknown status)";
 }
 
 unsigned char adptc_proto_build_request(unsigned char const code,
@@ -57,17 +30,15 @@ unsigned char adptc_proto_build_request(unsigned char const code,
   return (code << 5) | (body & 0x1f);
 }
 
-struct adptc_proto_result
-adptc_proto_try_send_request(int const fd, unsigned char const req) {
+struct adptc_result adptc_proto_try_send_request(int const fd,
+                                                 unsigned char const req) {
   ssize_t const write_res = write(fd, &req, 1);
-  if (write_res == -1)
-    return PROTO_OS_ERROR_RESULT(write_error);
-  if (write_res == 0)
-    return PROTO_OTHER_RESULT(partial_write);
-
-  assert(write_res == 1);
-
-  return PROTO_OK_RESULT;
+  switch (write_res) {
+  case -1: return ADPTC_OS_RESULT(proto_write_error);
+  case 0: return ADPTC_OTHER_RESULT(proto_partial_write);
+  case 1: return ADPTC_OK_RESULT;
+  default: adptc_support_todo;
+  }
 }
 
 float adptc_proto_unmarshall_float(unsigned long const marsh) {
@@ -88,4 +59,43 @@ float adptc_proto_unmarshall_float(unsigned long const marsh) {
 
   return biased_exp == 0xff ? (mantissa == 0 ? sign * INFINITY : NAN)
                             : sign * exp * coef;
+}
+
+void adptc_proto_init_response_decoder(
+    struct adptc_proto_response_decoder *const decdr) {
+  assert(decdr);
+
+  decdr->marsh_float = 0;
+  decdr->rem_float_bytes = 0;
+}
+
+struct adptc_proto_response const *adptc_proto_feed_response_decoder(
+    struct adptc_proto_response_decoder *const decdr,
+    unsigned char const byte) {
+  assert(decdr);
+
+  if (decdr->rem_float_bytes > 0) {
+    decdr->marsh_float <<= 8;
+    decdr->marsh_float |= byte;
+    decdr->rem_float_bytes--;
+
+    if (decdr->rem_float_bytes > 0)
+      return NULL;
+
+    decdr->resp.body.float_measurement.value =
+        adptc_proto_unmarshall_float(decdr->marsh_float);
+
+    return &decdr->resp;
+  }
+
+  unsigned char const status_code = byte;
+  decdr->resp.status_code = status_code;
+
+  if (status_code != adpt_proto_sc_force_measurement)
+    return &decdr->resp;
+
+  decdr->marsh_float = 0;
+  decdr->rem_float_bytes = 4;
+
+  return NULL;
 }

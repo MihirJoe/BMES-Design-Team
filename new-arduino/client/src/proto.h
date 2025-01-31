@@ -1,30 +1,33 @@
 #ifndef ADAPT_CLIENT_PROTO_H
 #define ADAPT_CLIENT_PROTO_H
 
-#include <adapt/proto.h>
+#include "result.h"
 
-#include <stdio.h>
-
-#define ADPTC_PROTO_IS_OK(res) (res.kind == adptc_proto_rk_ok)
-#define ADPTC_PROTO_IS_ERROR(res) (res.kind != adptc_proto_rk_ok)
-
-enum adptc_proto_result_kind {
-  adptc_proto_rk_ok,
-  adptc_proto_rk_write_error,
-  adptc_proto_rk_partial_write,
+union adptc_proto_response_body {
+  struct {
+    float value;
+  } float_measurement;
 };
 
-struct adptc_proto_result {
-  enum adptc_proto_result_kind kind;
-  int code;
+struct adptc_proto_response {
+  unsigned char status_code;
+  union adptc_proto_response_body body;
 };
 
-char const *adptc_proto_result_kind_to_str(enum adptc_proto_result_kind kind);
-void adptc_proto_print_result(FILE *out, struct adptc_proto_result res);
+struct adptc_proto_response_decoder {
+  struct adptc_proto_response resp;
+  unsigned long marsh_float;
+  int rem_float_bytes;
+};
+
 char const *adptc_proto_status_code_to_str(unsigned char code);
 unsigned char adptc_proto_build_request(unsigned char code, unsigned char body);
-struct adptc_proto_result adptc_proto_try_send_request(int fd,
-                                                       unsigned char req);
+struct adptc_result adptc_proto_try_send_request(int fd, unsigned char req);
 float adptc_proto_unmarshall_float(unsigned long marsh);
+void adptc_proto_init_response_decoder(
+    struct adptc_proto_response_decoder *decdr);
+struct adptc_proto_response const *
+adptc_proto_feed_response_decoder(struct adptc_proto_response_decoder *decdr,
+                                  unsigned char byte);
 
 #endif // ADAPT_CLIENT_PROTO_H

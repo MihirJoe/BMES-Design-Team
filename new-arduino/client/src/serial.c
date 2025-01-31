@@ -1,66 +1,34 @@
 #include "serial.h"
 
+#include "result.h"
+
 #include <adapt/proto.h>
 
 #include <termios.h>
 
 #include <assert.h>
-#include <errno.h>
-#include <string.h>
 
-#if _POSIX_C_SOURCE < 200112l
-#error "SUSv3 required"
-#endif
-
-#if ADPT_PROTO_SERIAL_BAUD == 115200l
+#if ADPT_PROTO_SERIAL_BAUD == 9600l
+#define SERIAL_SPEED B9600
+#elif ADPT_PROTO_SERIAL_BAUD == 115200l
 #define SERIAL_SPEED B115200
 #else
 #error "unsupported serial baud"
 #endif
 
-#define SERIAL_OK_RESULT                                                       \
-  ((struct adptc_serial_result){.kind = adptc_serial_rk_ok, .code = 0})
-#define SERIAL_OS_ERROR_RESULT(variant)                                        \
-  ((struct adptc_serial_result){.kind = adptc_serial_rk_##variant,             \
-                                .code = errno})
+static struct adptc_result try_get_attr(int const fd,
+                                        struct termios *const tty) {
+  assert(tty);
 
-char const *
-adptc_serial_result_kind_to_str(enum adptc_serial_result_kind const kind) {
-  switch (kind) {
-  case adptc_serial_rk_ok:
-    return "OK";
-  case adptc_serial_rk_getattr_error:
-    return "tcgetattr() failed";
-  case adptc_serial_rk_setispeed_error:
-    return "cfsetispeed() failed";
-  case adptc_serial_rk_setospeed_error:
-    return "cfsetospeed() failed";
-  case adptc_serial_rk_setattr_error:
-    return "tcsetattr() failed";
-  default:
-    return NULL;
-  }
-}
-
-void adptc_serial_print_result(FILE *const out,
-                               struct adptc_serial_result const res) {
-  char const *const kind_str = adptc_serial_result_kind_to_str(res.kind);
-  assert(kind_str);
-
-  fprintf(out, "%s", kind_str);
-  if (res.code != 0)
-    fprintf(out, ": %s", strerror(res.code));
-}
-
-static struct adptc_serial_result try_get_attr(int const fd,
-                                               struct termios *const tty) {
   if (tcgetattr(fd, tty) == -1)
-    return SERIAL_OS_ERROR_RESULT(getattr_error);
+    return ADPTC_OS_RESULT(serial_getattr_error);
 
-  return SERIAL_OK_RESULT;
+  return ADPTC_OK_RESULT;
 }
 
 static void configure_input_modes(tcflag_t *const iflag) {
+  assert(iflag);
+
   // TODO: what about frame and parity errors?
 
   // Disable input manipulation.
@@ -68,11 +36,15 @@ static void configure_input_modes(tcflag_t *const iflag) {
 }
 
 static void configure_output_modes(tcflag_t *const oflag) {
+  assert(oflag);
+
   // Disable output manipulation.
   *oflag &= ~(OPOST | ONLCR | OCRNL);
 }
 
 static void configure_control_modes(tcflag_t *const cflag) {
+  assert(cflag);
+
   // The character size is 8 bits.
   *cflag &= ~CSIZE;
   *cflag |= CS8;
@@ -89,6 +61,8 @@ static void configure_control_modes(tcflag_t *const cflag) {
 }
 
 static void configure_local_modes(tcflag_t *const lflag) {
+  assert(lflag);
+
   // Don't generate signals.
   *lflag &= ~ISIG;
   // Disable canonical mode.
@@ -98,25 +72,31 @@ static void configure_local_modes(tcflag_t *const lflag) {
 }
 
 static void configure_special_chars(cc_t cc[]) {
+  assert(cc);
+
   // Impose no lower bound on the read amount...
   cc[VMIN] = 0;
   // ...but reads timeout after 100 ms.
   cc[VTIME] = 1;
 }
 
-static struct adptc_serial_result try_set_speed(struct termios *const tty) {
-  if (cfsetispeed(tty, SERIAL_SPEED) == -1)
-    return SERIAL_OS_ERROR_RESULT(setispeed_error);
-  if (cfsetospeed(tty, SERIAL_SPEED) == -1)
-    return SERIAL_OS_ERROR_RESULT(setospeed_error);
+static struct adptc_result try_set_speed(struct termios *const tty) {
+  assert(tty);
 
-  return SERIAL_OK_RESULT;
+  if (cfsetispeed(tty, SERIAL_SPEED) == -1)
+    return ADPTC_OS_RESULT(serial_setispeed_error);
+  if (cfsetospeed(tty, SERIAL_SPEED) == -1)
+    return ADPTC_OS_RESULT(serial_setospeed_error);
+
+  return ADPTC_OK_RESULT;
 }
 
-static struct adptc_serial_result try_set_attr(int const fd,
-                                               struct termios *const tty) {
+static struct adptc_result try_set_attr(int const fd,
+                                        struct termios *const tty) {
+  assert(tty);
+
   if (tcsetattr(fd, TCSANOW, tty) == -1)
-    return SERIAL_OS_ERROR_RESULT(setattr_error);
+    return ADPTC_OS_RESULT(serial_setattr_error);
 
   // From `man 3 termios`:
   //   Note that tcsetattr() returns success if any of the requested
@@ -128,15 +108,15 @@ static struct adptc_serial_result try_set_attr(int const fd,
   // Because this is a simple, one-off client program,
   // we will not perform any such verification.
 
-  return SERIAL_OK_RESULT;
+  return ADPTC_OK_RESULT;
 }
 
-struct adptc_serial_result adptc_serial_try_configure(int const fd) {
-  struct adptc_serial_result res = SERIAL_OK_RESULT;
+struct adptc_result adptc_serial_try_configure(int const fd) {
+  struct adptc_result res = ADPTC_OK_RESULT;
 
   struct termios tty;
   res = try_get_attr(fd, &tty);
-  if (ADPTC_SERIAL_IS_ERROR(res))
+  if (!ADPTC_RESULT_IS_OK(res))
     goto done;
 
   configure_input_modes(&tty.c_iflag);
@@ -146,11 +126,11 @@ struct adptc_serial_result adptc_serial_try_configure(int const fd) {
   configure_special_chars(tty.c_cc);
 
   res = try_set_speed(&tty);
-  if (ADPTC_SERIAL_IS_ERROR(res))
+  if (!ADPTC_RESULT_IS_OK(res))
     goto done;
 
   res = try_set_attr(fd, &tty);
-  if (ADPTC_SERIAL_IS_ERROR(res))
+  if (!ADPTC_RESULT_IS_OK(res))
     goto done;
 
 done:
