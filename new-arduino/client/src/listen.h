@@ -4,11 +4,17 @@
 #include <pthread.h>
 
 #include <stdatomic.h>
+#include <stdbool.h>
 
 #define ADPTC_LISTEN_BUF_SIZE 256
 
-#define ADPTC_LISTEN_CONN_INIT                                                 \
-  ((struct adptc_listen_conn){.busy_flag = ATOMIC_FLAG_INIT})
+#define ADPTC_LISTEN_SYS_INIT                                                  \
+  ((struct adptc_listen_sys){.conn = {.busy_flag = ATOMIC_FLAG_INIT},          \
+                             .send_ctx = {.continue_flag = ATOMIC_FLAG_INIT},  \
+                             .recv_ctx = {.continue_flag = ATOMIC_FLAG_INIT}})
+
+typedef void *adptc_listen_handle;
+typedef void (*adptc_listen_monitor)(adptc_listen_handle lhnd, void *user_ctx);
 
 struct adptc_listen_incoming {
   unsigned char data_buf[ADPTC_LISTEN_BUF_SIZE];
@@ -21,23 +27,35 @@ struct adptc_listen_conn {
   atomic_bool incoming_out_for_delivery;
   atomic_flag busy_flag;
   pthread_mutex_t incoming_lock;
-  pthread_cond_t incoming_avail;
+  pthread_cond_t mon_has_work;
 };
 
-struct adptc_listen_ctx {
-  atomic_flag *continue_flag;
+struct adptc_listen_send_ctx {
   struct adptc_listen_conn *conn;
   int serial_fd;
+  atomic_flag continue_flag;
 };
 
-void adptc_listen_open_conn(struct adptc_listen_conn *conn);
-void adptc_listen_close_conn(struct adptc_listen_conn *conn);
-void adptc_listen_register_receiver(struct adptc_listen_conn *conn);
-void adptc_listen_unregister_receiver(struct adptc_listen_conn *conn);
-void adptc_listen_wait_for_incoming(struct adptc_listen_conn *conn);
+struct adptc_listen_recv_ctx {
+  struct adptc_listen_conn *conn;
+  adptc_listen_monitor mon;
+  void *mon_user_ctx;
+  atomic_flag continue_flag;
+};
+
+struct adptc_listen_sys {
+  struct adptc_listen_conn conn;
+  struct adptc_listen_send_ctx send_ctx;
+  struct adptc_listen_recv_ctx recv_ctx;
+  pthread_t send_thread;
+  pthread_t recv_thread;
+};
+
+void adptc_listen_start(struct adptc_listen_sys *lsys, int serial_fd,
+                        adptc_listen_monitor mon, void *mon_user_ctx);
+void adptc_listen_stop(struct adptc_listen_sys *lsys);
+
 struct adptc_listen_incoming const *
-adptc_listen_accept_incoming(struct adptc_listen_conn *conn);
-void adptc_listen_end_inspection(struct adptc_listen_conn *conn);
-void *adptc_listen_main(void *thread_arg);
+adptc_listen_accept_incoming(adptc_listen_handle lhnd);
 
 #endif // ADAPT_CLIENT_LISTEN_H

@@ -14,7 +14,6 @@
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #define DEFAULT_SERIAL_PATH "/dev/ttyACM0"
 
@@ -47,59 +46,23 @@ int main(int const argc, char *argv[const]) {
     return EXIT_FAILURE;
   }
 
-  atomic_flag continue_listening_flag = ATOMIC_FLAG_INIT;
-  atomic_flag_test_and_set(&continue_listening_flag);
+  struct adptc_listen_sys listen_sys = ADPTC_LISTEN_SYS_INIT;
+  struct adptc_monitor_ctx mon_user_ctx = {.file = monitor_file};
 
-  struct adptc_listen_conn listen_conn = ADPTC_LISTEN_CONN_INIT;
-  adptc_listen_open_conn(&listen_conn);
-
-  struct adptc_listen_ctx listen_ctx = {.continue_flag =
-                                            &continue_listening_flag,
-                                        .conn = &listen_conn,
-                                        .serial_fd = serial_fd};
-
-  pthread_t listener_thread;
-  if (pthread_create(&listener_thread, NULL, adptc_listen_main, &listen_ctx) !=
-      0) {
-    fprintf(stderr, "fatal error: cannot spawn listener thread\n");
-    close(serial_fd);
-    return EXIT_FAILURE;
-  }
-
-  atomic_flag continue_monitoring_flag = ATOMIC_FLAG_INIT;
-  atomic_flag_test_and_set(&continue_monitoring_flag);
-
-  struct adptc_monitor_ctx display_ctx = {.continue_flag =
-                                              &continue_monitoring_flag,
-                                          .conn = &listen_conn,
-                                          .file = monitor_file};
-
-  pthread_t monitor_thread;
-  if (pthread_create(&monitor_thread, NULL, adptc_monitor_main, &display_ctx) !=
-      0) {
-    fprintf(stderr, "fatal error: cannot spawn monitor thread\n");
-    close(serial_fd);
-    return EXIT_FAILURE;
-  }
+  adptc_listen_start(&listen_sys, serial_fd, adptc_monitor, &mon_user_ctx);
 
   aptc_res = adptc_console_attend(serial_fd);
   if (!ADPTC_RESULT_IS_OK(aptc_res)) {
     fprintf(stderr, "fatal error: ");
     adptc_result_print(stderr, aptc_res);
     fprintf(stderr, "\n");
-    adptc_listen_close_conn(&listen_conn);
     close(serial_fd);
     return EXIT_FAILURE;
   }
 
-  atomic_flag_clear(&continue_monitoring_flag);
-  atomic_flag_clear(&continue_listening_flag);
-
-  pthread_join(monitor_thread, NULL);
-  pthread_join(listener_thread, NULL);
+  adptc_listen_stop(&listen_sys);
 
   // Clean up resources.
-  adptc_listen_close_conn(&listen_conn);
   fclose(monitor_file);
   close(serial_fd);
 

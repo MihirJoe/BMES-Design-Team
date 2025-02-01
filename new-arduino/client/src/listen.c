@@ -8,88 +8,33 @@
 #include <unistd.h>
 
 #include <assert.h>
-#include <errno.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
 
-// TODO: check for pthread errors
+struct adptc_listen_monitor_ctx {
+  struct adptc_listen_conn *conn;
+  atomic_flag *continue_flag;
+};
 
-static struct timespec const accept_incoming_timeout = {.tv_sec = 0,
-                                                        .tv_nsec = 1000000l};
-
-void adptc_listen_open_conn(struct adptc_listen_conn *const conn) {
-  assert(conn);
-
-  atomic_store(&conn->incoming_out_for_delivery, false);
-  // TODO: check error
-  pthread_mutex_init(&conn->incoming_lock, NULL);
-  pthread_cond_init(&conn->incoming_avail, NULL);
-}
-
-void adptc_listen_close_conn(struct adptc_listen_conn *const conn) {
-  assert(conn);
-
-  // TODO: check error
-  pthread_cond_destroy(&conn->incoming_avail);
-  pthread_mutex_destroy(&conn->incoming_lock);
-}
-
-void adptc_listen_register_receiver(struct adptc_listen_conn *const conn) {
-  assert(conn);
-
-  // TODO: check error
-  pthread_mutex_lock(&conn->incoming_lock);
-}
-
-void adptc_listen_unregister_receiver(struct adptc_listen_conn *const conn) {
-  assert(conn);
-
-  // TODO: check error
-  pthread_mutex_unlock(&conn->incoming_lock);
-}
-
-void adptc_listen_wait_for_incoming(struct adptc_listen_conn *const conn) {
-  int const timedwait_res = pthread_cond_timedwait(
-      &conn->incoming_avail, &conn->incoming_lock, &accept_incoming_timeout);
-  if (timedwait_res != 0 && timedwait_res != ETIMEDOUT)
-    adptc_support_todo;
-}
-
-struct adptc_listen_incoming const *
-adptc_listen_accept_incoming(struct adptc_listen_conn *const conn) {
-  assert(conn);
-
-  if (!atomic_load(&conn->incoming_out_for_delivery))
-    return NULL;
-
-  atomic_store(&conn->incoming_out_for_delivery, false);
-
-  return &conn->incoming;
-}
-
-void adptc_listen_end_inspection(struct adptc_listen_conn *const conn) {
-  assert(conn);
-
-  atomic_flag_clear(&conn->busy_flag);
-}
-
-void *adptc_listen_main(void *const thread_arg) {
-  struct adptc_listen_ctx const *const ctx = thread_arg;
+static void *send_routine(void *const thread_arg) {
+  struct adptc_listen_send_ctx *const ctx = thread_arg;
   assert(ctx);
   assert(ctx->conn);
 
   enum state {
     state_read,
-    state_wait_to_fill_incoming,
-    state_fill_incoming,
+    state_wait,
+    state_deliver,
   };
+
+  int pthread_res;
 
   enum state state = state_read;
   ssize_t read_res;
 
-  while (atomic_flag_test_and_set(ctx->continue_flag)) {
+  while (atomic_flag_test_and_set(&ctx->continue_flag)) {
     switch (state) {
     case state_read:
       read_res =
@@ -98,26 +43,32 @@ void *adptc_listen_main(void *const thread_arg) {
         // TODO
         read_res = 0;
 
-      state = state_wait_to_fill_incoming;
+      state = state_wait;
       break;
 
-    case state_wait_to_fill_incoming:
+    case state_wait:
       if (!atomic_flag_test_and_set(&ctx->conn->busy_flag))
-        state = state_fill_incoming;
+        state = state_deliver;
 
       break;
 
-    case state_fill_incoming:;
+    case state_deliver:;
       size_t const read_len = read_res;
       memcpy(ctx->conn->incoming.data_buf, ctx->conn->read_buf, read_len);
       ctx->conn->incoming.data_len = read_len;
 
-      // TODO: check error
-      pthread_mutex_lock(&ctx->conn->incoming_lock);
+      pthread_res = pthread_mutex_lock(&ctx->conn->incoming_lock);
+      if (pthread_res != 0)
+        adptc_support_todo;
+
       atomic_store(&ctx->conn->incoming_out_for_delivery, true);
 
-      int const signal_res = pthread_cond_signal(&ctx->conn->incoming_avail);
-      if (signal_res != 0)
+      pthread_res = pthread_mutex_unlock(&ctx->conn->incoming_lock);
+      if (pthread_res != 0)
+        adptc_support_todo;
+
+      pthread_res = pthread_cond_signal(&ctx->conn->mon_has_work);
+      if (pthread_res != 0)
         adptc_support_todo;
 
       state = state_read;
@@ -128,4 +79,126 @@ void *adptc_listen_main(void *const thread_arg) {
   }
 
   return NULL;
+}
+
+static void *recv_routine(void *const thread_arg) {
+  struct adptc_listen_recv_ctx *const ctx = thread_arg;
+  assert(ctx);
+  assert(ctx->conn);
+  assert(ctx->mon);
+
+  int pthread_res;
+
+  pthread_res = pthread_mutex_lock(&ctx->conn->incoming_lock);
+  if (pthread_res != 0)
+    adptc_support_todo;
+
+  struct adptc_listen_monitor_ctx mon_ctx = {
+      .conn = ctx->conn, .continue_flag = &ctx->continue_flag};
+  ctx->mon(&mon_ctx, ctx->mon_user_ctx);
+
+  pthread_res = pthread_mutex_unlock(&ctx->conn->incoming_lock);
+  if (pthread_res != 0)
+    adptc_support_todo;
+
+  return NULL;
+}
+
+void adptc_listen_start(struct adptc_listen_sys *const ls, int const serial_fd,
+                        adptc_listen_monitor const mon,
+                        void *const mon_user_ctx) {
+  int pthread_res;
+
+  atomic_store(&ls->conn.incoming_out_for_delivery, false);
+  // TODO: don't set busy flag
+  atomic_flag_test_and_set(&ls->conn.busy_flag);
+  atomic_flag_test_and_set(&ls->send_ctx.continue_flag);
+  atomic_flag_test_and_set(&ls->recv_ctx.continue_flag);
+
+  pthread_mutexattr_t lock_attr;
+  // TODO: check error
+  pthread_mutexattr_init(&lock_attr);
+  pthread_mutexattr_settype(&lock_attr, PTHREAD_MUTEX_ERRORCHECK);
+
+  pthread_res = pthread_mutex_init(&ls->conn.incoming_lock, &lock_attr);
+  if (pthread_res != 0)
+    adptc_support_todo;
+
+  // TODO: check error
+  pthread_mutexattr_destroy(&lock_attr);
+
+  pthread_res = pthread_cond_init(&ls->conn.mon_has_work, NULL);
+  if (pthread_res != 0)
+    adptc_support_todo;
+
+  ls->send_ctx.conn = &ls->conn;
+  ls->send_ctx.serial_fd = serial_fd;
+  pthread_res =
+      pthread_create(&ls->send_thread, NULL, send_routine, &ls->send_ctx);
+  if (pthread_res != 0)
+    adptc_support_todo;
+
+  ls->recv_ctx.conn = &ls->conn;
+  ls->recv_ctx.mon = mon;
+  ls->recv_ctx.mon_user_ctx = mon_user_ctx;
+  pthread_res =
+      pthread_create(&ls->recv_thread, NULL, recv_routine, &ls->recv_ctx);
+  if (pthread_res != 0)
+    adptc_support_todo;
+}
+
+void adptc_listen_stop(struct adptc_listen_sys *const ls) {
+  assert(ls);
+
+  int pthread_res;
+
+  atomic_flag_clear(&ls->recv_ctx.continue_flag);
+
+  pthread_res = pthread_cond_signal(&ls->conn.mon_has_work);
+  if (pthread_res != 0)
+    adptc_support_todo;
+
+  pthread_res = pthread_join(ls->recv_thread, NULL);
+  if (pthread_res != 0)
+    adptc_support_todo;
+
+  atomic_flag_clear(&ls->send_ctx.continue_flag);
+
+  pthread_res = pthread_join(ls->send_thread, NULL);
+  if (pthread_res != 0)
+    adptc_support_todo;
+
+  pthread_res = pthread_cond_destroy(&ls->conn.mon_has_work);
+  if (pthread_res != 0)
+    adptc_support_todo;
+
+  pthread_res = pthread_mutex_destroy(&ls->conn.incoming_lock);
+  if (pthread_res != 0)
+    adptc_support_todo;
+}
+
+struct adptc_listen_incoming const *
+adptc_listen_accept_incoming(adptc_listen_handle const lhnd) {
+  struct adptc_listen_monitor_ctx *const ctx = lhnd;
+  assert(ctx);
+
+  int pthread_res;
+
+  atomic_flag_clear(&ctx->conn->busy_flag);
+
+  bool should_continue;
+  while ((should_continue = atomic_flag_test_and_set(ctx->continue_flag)) &&
+         !atomic_load(&ctx->conn->incoming_out_for_delivery)) {
+    pthread_res =
+        pthread_cond_wait(&ctx->conn->mon_has_work, &ctx->conn->incoming_lock);
+    if (pthread_res != 0)
+      adptc_support_todo;
+  }
+
+  if (!should_continue)
+    return NULL;
+
+  atomic_store(&ctx->conn->incoming_out_for_delivery, false);
+
+  return &ctx->conn->incoming;
 }

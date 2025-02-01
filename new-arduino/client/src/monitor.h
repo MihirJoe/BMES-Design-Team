@@ -7,11 +7,9 @@
 #include <stdio.h>
 
 struct adptc_monitor_ctx {
-  atomic_flag *continue_flag;
-  struct adptc_listen_conn *conn;
   FILE *file;
 };
 
-void *adptc_monitor_main(void *thread_arg);
+void adptc_monitor(adptc_listen_handle lhnd, void *user_ctx);
 
 #endif // ADAPT_CLIENT_MONITOR_H
