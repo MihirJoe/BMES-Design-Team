@@ -46,10 +46,10 @@ int main(int const argc, char *argv[const]) {
     return EXIT_FAILURE;
   }
 
-  struct adptc_listen_sys listen_sys = ADPTC_LISTEN_SYS_INIT;
   struct adptc_monitor_ctx mon_user_ctx = {.file = monitor_file};
 
-  adptc_listen_start(&listen_sys, serial_fd, adptc_monitor, &mon_user_ctx);
+  adptc_listen_handle const listen = adptc_listen_create();
+  adptc_listen_start(listen, serial_fd, adptc_monitor, &mon_user_ctx);
 
   aptc_res = adptc_console_attend(serial_fd);
   if (!ADPTC_RESULT_IS_OK(aptc_res)) {
@@ -60,7 +60,8 @@ int main(int const argc, char *argv[const]) {
     return EXIT_FAILURE;
   }
 
-  adptc_listen_stop(&listen_sys);
+  adptc_listen_stop(listen);
+  adptc_listen_destroy(listen);
 
   // Clean up resources.
   fclose(monitor_file);

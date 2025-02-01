@@ -6,56 +6,25 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 
-#define ADPTC_LISTEN_BUF_SIZE 256
-
-#define ADPTC_LISTEN_SYS_INIT                                                  \
-  ((struct adptc_listen_sys){.conn = {.busy_flag = ATOMIC_FLAG_INIT},          \
-                             .send_ctx = {.continue_flag = ATOMIC_FLAG_INIT},  \
-                             .recv_ctx = {.continue_flag = ATOMIC_FLAG_INIT}})
-
 typedef void *adptc_listen_handle;
-typedef void (*adptc_listen_monitor)(adptc_listen_handle lhnd, void *user_ctx);
+typedef void *adptc_listen_sender_handle;
+typedef void *adptc_listen_incoming_handle;
 
-struct adptc_listen_incoming {
-  unsigned char data_buf[ADPTC_LISTEN_BUF_SIZE];
-  size_t data_len;
-};
+typedef void (*adptc_listen_monitor)(adptc_listen_sender_handle sender,
+                                     void *user_ctx);
 
-struct adptc_listen_conn {
-  struct adptc_listen_incoming incoming;
-  unsigned char read_buf[ADPTC_LISTEN_BUF_SIZE];
-  atomic_bool incoming_out_for_delivery;
-  atomic_flag busy_flag;
-  pthread_mutex_t incoming_lock;
-  pthread_cond_t mon_has_work;
-};
+adptc_listen_handle adptc_listen_create(void);
+void adptc_listen_destroy(adptc_listen_handle listen);
 
-struct adptc_listen_send_ctx {
-  struct adptc_listen_conn *conn;
-  int serial_fd;
-  atomic_flag continue_flag;
-};
-
-struct adptc_listen_recv_ctx {
-  struct adptc_listen_conn *conn;
-  adptc_listen_monitor mon;
-  void *mon_user_ctx;
-  atomic_flag continue_flag;
-};
-
-struct adptc_listen_sys {
-  struct adptc_listen_conn conn;
-  struct adptc_listen_send_ctx send_ctx;
-  struct adptc_listen_recv_ctx recv_ctx;
-  pthread_t send_thread;
-  pthread_t recv_thread;
-};
-
-void adptc_listen_start(struct adptc_listen_sys *lsys, int serial_fd,
+void adptc_listen_start(adptc_listen_handle listen, int serial_fd,
                         adptc_listen_monitor mon, void *mon_user_ctx);
-void adptc_listen_stop(struct adptc_listen_sys *lsys);
+void adptc_listen_stop(adptc_listen_handle listen);
 
-struct adptc_listen_incoming const *
-adptc_listen_accept_incoming(adptc_listen_handle lhnd);
+adptc_listen_incoming_handle
+adptc_listen_accept_incoming(adptc_listen_sender_handle sender);
+unsigned char const *
+adptc_listen_get_incoming_data(adptc_listen_incoming_handle incoming);
+size_t
+adptc_listen_get_incoming_data_len(adptc_listen_incoming_handle incoming);
 
 #endif // ADAPT_CLIENT_LISTEN_H

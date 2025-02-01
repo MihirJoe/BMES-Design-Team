@@ -11,17 +11,81 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 
-struct adptc_listen_monitor_ctx {
-  struct adptc_listen_conn *conn;
+#define LISTEN_BUF_SIZE 256
+
+#define LISTEN_CTX_INIT                                                        \
+  ((struct listen_ctx){.conn = {.busy_flag = ATOMIC_FLAG_INIT},                \
+                       .send_ctx = {.continue_flag = ATOMIC_FLAG_INIT},        \
+                       .recv_ctx = {.continue_flag = ATOMIC_FLAG_INIT}})
+
+struct incoming {
+  unsigned char data_buf[LISTEN_BUF_SIZE];
+  size_t data_len;
+};
+
+struct conn {
+  struct incoming incoming;
+  unsigned char read_buf[LISTEN_BUF_SIZE];
+  atomic_bool incoming_out_for_delivery;
+  atomic_flag busy_flag;
+  pthread_mutex_t incoming_lock;
+  pthread_cond_t recv_has_work;
+};
+
+struct send_ctx {
+  struct conn *conn;
+  int serial_fd;
+  atomic_flag continue_flag;
+};
+
+struct recv_ctx {
+  struct conn *conn;
+  adptc_listen_monitor mon;
+  void *mon_user_ctx;
+  atomic_flag continue_flag;
+};
+
+struct listen_ctx {
+  struct conn conn;
+  struct send_ctx send_ctx;
+  struct recv_ctx recv_ctx;
+  pthread_t send_thread;
+  pthread_t recv_thread;
+};
+
+struct monitor_ctx {
+  struct conn *conn;
   atomic_flag *continue_flag;
 };
 
+adptc_listen_handle adptc_listen_create(void) {
+  struct listen_ctx *const ctx = malloc(sizeof(struct listen_ctx));
+  if (!ctx)
+    return NULL;
+
+  *ctx = LISTEN_CTX_INIT;
+  ctx->send_ctx.conn = &ctx->conn;
+  ctx->recv_ctx.conn = &ctx->conn;
+
+  return ctx;
+}
+
+void adptc_listen_destroy(adptc_listen_handle lhnd) {
+  struct listen_ctx *const ctx = lhnd;
+  assert(ctx);
+
+  free(ctx);
+}
+
 static void *send_routine(void *const thread_arg) {
-  struct adptc_listen_send_ctx *const ctx = thread_arg;
+  struct send_ctx *const ctx = thread_arg;
   assert(ctx);
   assert(ctx->conn);
+
+  // NOTE: this is a finite state machine.
 
   enum state {
     state_read,
@@ -34,11 +98,17 @@ static void *send_routine(void *const thread_arg) {
   enum state state = state_read;
   ssize_t read_res;
 
+  // NOTE: in-between states,
+  //       check the 'continue' flag.
+  //       When it is cleared, return.
   while (atomic_flag_test_and_set(&ctx->continue_flag)) {
     switch (state) {
     case state_read:
-      read_res =
-          read(ctx->serial_fd, ctx->conn->read_buf, ADPTC_LISTEN_BUF_SIZE);
+      // NOTE: we don't read directly into the 'incoming' structure
+      //       because we plan to begin the next read
+      //       while the receiver thread
+      //       is processing the previous incoming data.
+      read_res = read(ctx->serial_fd, ctx->conn->read_buf, LISTEN_BUF_SIZE);
       if (read_res <= 0)
         // TODO
         read_res = 0;
@@ -47,30 +117,56 @@ static void *send_routine(void *const thread_arg) {
       break;
 
     case state_wait:
+      // Wait until the receiver thread is done using the 'incoming' structure
+      // so that we can copy the read data into it.
+      // NOTE: because the default state of the 'busy' flag is set,
+      //       on the first iteration of this loop,
+      //       we wait until the receiver thread
+      //       calls adptc_listen_accept_incoming.
+      //       This gives us confidence
+      //       that the receiver thread
+      //       will receive the condition variable signal.
       if (!atomic_flag_test_and_set(&ctx->conn->busy_flag))
         state = state_deliver;
 
       break;
 
     case state_deliver:;
+      // Copy the read data to the 'incoming' structure.
+      // NOTE: this structure is protected not by a lock
+      //       but by the 'busy' flag,
+      //       which, when cleared,
+      //       indicates that the receiver thread
+      //       is not using the 'incoming' structure.
       size_t const read_len = read_res;
       memcpy(ctx->conn->incoming.data_buf, ctx->conn->read_buf, read_len);
       ctx->conn->incoming.data_len = read_len;
 
+      // NOTE: Acquiring this lock
+      //       is part of the song and dance of using condition variables.
       pthread_res = pthread_mutex_lock(&ctx->conn->incoming_lock);
       if (pthread_res != 0)
         adptc_support_todo;
 
+      // Indicate to the receiver thread
+      // that incoming serial data is available.
       atomic_store(&ctx->conn->incoming_out_for_delivery, true);
 
+      // Release the lock
+      // so that the receiver thread may wake up
+      // when the condition variable is signalled.
       pthread_res = pthread_mutex_unlock(&ctx->conn->incoming_lock);
       if (pthread_res != 0)
         adptc_support_todo;
 
-      pthread_res = pthread_cond_signal(&ctx->conn->mon_has_work);
+      // Wake up the receiver thread
+      // (if it is waiting on the condition variable).
+      pthread_res = pthread_cond_signal(&ctx->conn->recv_has_work);
       if (pthread_res != 0)
         adptc_support_todo;
 
+      // While the receiver thread is processing the incoming data,
+      // begin the next read.
       state = state_read;
       break;
 
@@ -82,7 +178,7 @@ static void *send_routine(void *const thread_arg) {
 }
 
 static void *recv_routine(void *const thread_arg) {
-  struct adptc_listen_recv_ctx *const ctx = thread_arg;
+  struct recv_ctx *const ctx = thread_arg;
   assert(ctx);
   assert(ctx->conn);
   assert(ctx->mon);
@@ -93,8 +189,8 @@ static void *recv_routine(void *const thread_arg) {
   if (pthread_res != 0)
     adptc_support_todo;
 
-  struct adptc_listen_monitor_ctx mon_ctx = {
-      .conn = ctx->conn, .continue_flag = &ctx->continue_flag};
+  struct monitor_ctx mon_ctx = {.conn = ctx->conn,
+                                .continue_flag = &ctx->continue_flag};
   ctx->mon(&mon_ctx, ctx->mon_user_ctx);
 
   pthread_res = pthread_mutex_unlock(&ctx->conn->incoming_lock);
@@ -104,104 +200,140 @@ static void *recv_routine(void *const thread_arg) {
   return NULL;
 }
 
-void adptc_listen_start(struct adptc_listen_sys *const ls, int const serial_fd,
+void adptc_listen_start(adptc_listen_handle const lhnd, int const serial_fd,
                         adptc_listen_monitor const mon,
                         void *const mon_user_ctx) {
-  assert(ls);
+  struct listen_ctx *const ctx = lhnd;
+  assert(ctx);
 
   int pthread_res;
 
-  atomic_store(&ls->conn.incoming_out_for_delivery, false);
-  // TODO: don't set busy flag
-  atomic_flag_test_and_set(&ls->conn.busy_flag);
-  atomic_flag_test_and_set(&ls->send_ctx.continue_flag);
-  atomic_flag_test_and_set(&ls->recv_ctx.continue_flag);
+  atomic_store(&ctx->conn.incoming_out_for_delivery, false);
+  atomic_flag_test_and_set(&ctx->conn.busy_flag);
+  atomic_flag_test_and_set(&ctx->send_ctx.continue_flag);
+  atomic_flag_test_and_set(&ctx->recv_ctx.continue_flag);
 
   pthread_mutexattr_t lock_attr;
+
+  pthread_res = pthread_mutexattr_init(&lock_attr);
+  if (pthread_res != 0)
+    adptc_support_todo;
+
   // TODO: check error
-  pthread_mutexattr_init(&lock_attr);
   pthread_mutexattr_settype(&lock_attr, PTHREAD_MUTEX_ERRORCHECK);
 
-  pthread_res = pthread_mutex_init(&ls->conn.incoming_lock, &lock_attr);
+  pthread_res = pthread_mutex_init(&ctx->conn.incoming_lock, &lock_attr);
   if (pthread_res != 0)
     adptc_support_todo;
 
-  // TODO: check error
-  pthread_mutexattr_destroy(&lock_attr);
-
-  pthread_res = pthread_cond_init(&ls->conn.mon_has_work, NULL);
+  pthread_res = pthread_mutexattr_destroy(&lock_attr);
   if (pthread_res != 0)
     adptc_support_todo;
 
-  ls->send_ctx.conn = &ls->conn;
-  ls->send_ctx.serial_fd = serial_fd;
+  pthread_res = pthread_cond_init(&ctx->conn.recv_has_work, NULL);
+  if (pthread_res != 0)
+    adptc_support_todo;
+
+  ctx->send_ctx.serial_fd = serial_fd;
   pthread_res =
-      pthread_create(&ls->send_thread, NULL, send_routine, &ls->send_ctx);
+      pthread_create(&ctx->send_thread, NULL, send_routine, &ctx->send_ctx);
   if (pthread_res != 0)
     adptc_support_todo;
 
-  ls->recv_ctx.conn = &ls->conn;
-  ls->recv_ctx.mon = mon;
-  ls->recv_ctx.mon_user_ctx = mon_user_ctx;
+  ctx->recv_ctx.mon = mon;
+  ctx->recv_ctx.mon_user_ctx = mon_user_ctx;
   pthread_res =
-      pthread_create(&ls->recv_thread, NULL, recv_routine, &ls->recv_ctx);
+      pthread_create(&ctx->recv_thread, NULL, recv_routine, &ctx->recv_ctx);
   if (pthread_res != 0)
     adptc_support_todo;
 }
 
-void adptc_listen_stop(struct adptc_listen_sys *const ls) {
-  assert(ls);
+void adptc_listen_stop(adptc_listen_handle const lhnd) {
+  struct listen_ctx *const ctx = lhnd;
+  assert(ctx);
 
   int pthread_res;
 
-  atomic_flag_clear(&ls->recv_ctx.continue_flag);
+  // Indicate to the receiver thread that we are done.
+  atomic_flag_clear(&ctx->recv_ctx.continue_flag);
 
-  pthread_res = pthread_cond_signal(&ls->conn.mon_has_work);
+  // If the receiver thread is waiting on the condition variable,
+  // wake it up so that it can respond to the request to stop.
+  pthread_res = pthread_cond_signal(&ctx->conn.recv_has_work);
   if (pthread_res != 0)
     adptc_support_todo;
 
-  pthread_res = pthread_join(ls->recv_thread, NULL);
+  // Block until the receiver thread exits.
+  pthread_res = pthread_join(ctx->recv_thread, NULL);
   if (pthread_res != 0)
     adptc_support_todo;
 
-  atomic_flag_clear(&ls->send_ctx.continue_flag);
+  // Indicate to the sender thread that we are done.
+  atomic_flag_clear(&ctx->send_ctx.continue_flag);
 
-  pthread_res = pthread_join(ls->send_thread, NULL);
+  // Block until the sender thread exits.
+  pthread_res = pthread_join(ctx->send_thread, NULL);
   if (pthread_res != 0)
     adptc_support_todo;
 
-  pthread_res = pthread_cond_destroy(&ls->conn.mon_has_work);
+  // Destroy the condition variable.
+  pthread_res = pthread_cond_destroy(&ctx->conn.recv_has_work);
   if (pthread_res != 0)
     adptc_support_todo;
 
-  pthread_res = pthread_mutex_destroy(&ls->conn.incoming_lock);
+  // Destroy the lock.
+  pthread_res = pthread_mutex_destroy(&ctx->conn.incoming_lock);
   if (pthread_res != 0)
     adptc_support_todo;
 }
 
-struct adptc_listen_incoming const *
-adptc_listen_accept_incoming(adptc_listen_handle const lhnd) {
-  struct adptc_listen_monitor_ctx *const ctx = lhnd;
+adptc_listen_incoming_handle
+adptc_listen_accept_incoming(adptc_listen_sender_handle const shnd) {
+  struct monitor_ctx *const ctx = shnd;
   assert(ctx);
   assert(ctx->conn);
 
   int pthread_res;
 
+  // Tell the sender thread
+  // that we are done using the previous incoming data.
   atomic_flag_clear(&ctx->conn->busy_flag);
 
   bool should_continue;
   while ((should_continue = atomic_flag_test_and_set(ctx->continue_flag)) &&
          !atomic_load(&ctx->conn->incoming_out_for_delivery)) {
+    // Wait until someone tells us to wake up.
+    // NOTE: waiting on a condition variable releases the lock,
+    //       allowing the sender thread to acquire it
+    //       and set the 'out-for-delivery' flag.
     pthread_res =
-        pthread_cond_wait(&ctx->conn->mon_has_work, &ctx->conn->incoming_lock);
+        pthread_cond_wait(&ctx->conn->recv_has_work, &ctx->conn->incoming_lock);
     if (pthread_res != 0)
       adptc_support_todo;
   }
 
+  // The main thread has requested for us to exit.
+  // Return `NULL` so that the caller knows we are done.
   if (!should_continue)
     return NULL;
 
+  // Tell the sender thread that we received the delivery.
   atomic_store(&ctx->conn->incoming_out_for_delivery, false);
 
   return &ctx->conn->incoming;
+}
+
+unsigned char const *
+adptc_listen_get_incoming_data(adptc_listen_incoming_handle ihnd) {
+  struct incoming *const incom = ihnd;
+  assert(incom);
+
+  return incom->data_buf;
+}
+
+size_t adptc_listen_get_incoming_data_len(adptc_listen_incoming_handle ihnd) {
+  struct incoming *const incom = ihnd;
+  assert(incom);
+
+  return incom->data_len;
 }
