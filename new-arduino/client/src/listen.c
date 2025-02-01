@@ -107,6 +107,8 @@ static void *recv_routine(void *const thread_arg) {
 void adptc_listen_start(struct adptc_listen_sys *const ls, int const serial_fd,
                         adptc_listen_monitor const mon,
                         void *const mon_user_ctx) {
+  assert(ls);
+
   int pthread_res;
 
   atomic_store(&ls->conn.incoming_out_for_delivery, false);
@@ -181,6 +183,7 @@ struct adptc_listen_incoming const *
 adptc_listen_accept_incoming(adptc_listen_handle const lhnd) {
   struct adptc_listen_monitor_ctx *const ctx = lhnd;
   assert(ctx);
+  assert(ctx->conn);
 
   int pthread_res;
 

@@ -24,6 +24,8 @@ char const *adptc_result_kind_to_str(enum adptc_result_kind const kind) {
 }
 
 void adptc_result_print(FILE *const out, struct adptc_result const res) {
+  assert(out);
+
   char const *const kind_str = adptc_result_kind_to_str(res.kind);
   assert(kind_str);
 

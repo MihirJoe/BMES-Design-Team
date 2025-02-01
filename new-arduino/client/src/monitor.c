@@ -11,6 +11,7 @@
 void adptc_monitor(adptc_listen_handle const lhnd, void *user_ctx) {
   struct adptc_monitor_ctx *const ctx = user_ctx;
   assert(ctx);
+  assert(ctx->file);
 
   struct adptc_proto_response_decoder resp_decdr;
   adptc_proto_init_response_decoder(&resp_decdr);
