@@ -48,7 +48,7 @@ int main(int const argc, char *argv[const]) {
 
   struct adptc_monitor_ctx mon_user_ctx = {.file = monitor_file};
 
-  adptc_listen_handle const listen = adptc_listen_create();
+  adptc_listen const listen = adptc_listen_create();
   adptc_listen_start(listen, serial_fd, adptc_monitor, &mon_user_ctx);
 
   aptc_res = adptc_console_attend(serial_fd);

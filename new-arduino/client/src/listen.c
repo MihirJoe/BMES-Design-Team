@@ -14,7 +14,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define LISTEN_BUF_SIZE 256
+// NOTE: for a baud of 115200
+//       (the maximum we will support),
+//       the theoretical maximum number of bytes
+//       the Arduino can transmit in one decisecond (100 ms)
+//       is exactly 1440.
+#define LISTEN_BUF_SIZE 1440
 
 #define LISTEN_CTX_INIT                                                        \
   ((struct listen_ctx){.conn = {.busy_flag = ATOMIC_FLAG_INIT},                \
@@ -41,6 +46,11 @@ struct send_ctx {
   atomic_flag continue_flag;
 };
 
+struct monitor_ctx {
+  struct conn *conn;
+  atomic_flag *continue_flag;
+};
+
 struct recv_ctx {
   struct conn *conn;
   adptc_listen_monitor mon;
@@ -56,12 +66,7 @@ struct listen_ctx {
   pthread_t recv_thread;
 };
 
-struct monitor_ctx {
-  struct conn *conn;
-  atomic_flag *continue_flag;
-};
-
-adptc_listen_handle adptc_listen_create(void) {
+adptc_listen adptc_listen_create(void) {
   struct listen_ctx *const ctx = malloc(sizeof(struct listen_ctx));
   if (!ctx)
     return NULL;
@@ -73,7 +78,7 @@ adptc_listen_handle adptc_listen_create(void) {
   return ctx;
 }
 
-void adptc_listen_destroy(adptc_listen_handle lhnd) {
+void adptc_listen_destroy(adptc_listen lhnd) {
   struct listen_ctx *const ctx = lhnd;
   assert(ctx);
 
@@ -126,6 +131,9 @@ static void *send_routine(void *const thread_arg) {
       //       This gives us confidence
       //       that the receiver thread
       //       will receive the condition variable signal.
+      // NOTE: this is basically a spinlock.
+      //       Condition variables are costly
+      //       and we don't expect to be here very long.
       if (!atomic_flag_test_and_set(&ctx->conn->busy_flag))
         state = state_deliver;
 
@@ -200,7 +208,7 @@ static void *recv_routine(void *const thread_arg) {
   return NULL;
 }
 
-void adptc_listen_start(adptc_listen_handle const lhnd, int const serial_fd,
+void adptc_listen_start(adptc_listen const lhnd, int const serial_fd,
                         adptc_listen_monitor const mon,
                         void *const mon_user_ctx) {
   struct listen_ctx *const ctx = lhnd;
@@ -248,7 +256,7 @@ void adptc_listen_start(adptc_listen_handle const lhnd, int const serial_fd,
     adptc_support_todo;
 }
 
-void adptc_listen_stop(adptc_listen_handle const lhnd) {
+void adptc_listen_stop(adptc_listen const lhnd) {
   struct listen_ctx *const ctx = lhnd;
   assert(ctx);
 
@@ -287,8 +295,8 @@ void adptc_listen_stop(adptc_listen_handle const lhnd) {
     adptc_support_todo;
 }
 
-adptc_listen_incoming_handle
-adptc_listen_accept_incoming(adptc_listen_sender_handle const shnd) {
+adptc_listen_incoming
+adptc_listen_accept_incoming(adptc_listen_sender const shnd) {
   struct monitor_ctx *const ctx = shnd;
   assert(ctx);
   assert(ctx->conn);
@@ -324,16 +332,23 @@ adptc_listen_accept_incoming(adptc_listen_sender_handle const shnd) {
 }
 
 unsigned char const *
-adptc_listen_get_incoming_data(adptc_listen_incoming_handle ihnd) {
+adptc_listen_get_incoming_data(adptc_listen_incoming const ihnd) {
   struct incoming *const incom = ihnd;
   assert(incom);
 
   return incom->data_buf;
 }
 
-size_t adptc_listen_get_incoming_data_len(adptc_listen_incoming_handle ihnd) {
+size_t adptc_listen_get_incoming_data_len(adptc_listen_incoming const ihnd) {
   struct incoming *const incom = ihnd;
   assert(incom);
 
   return incom->data_len;
+}
+
+double adptc_listen_get_incoming_fill_ratio(adptc_listen_incoming const ihnd) {
+  struct incoming *const incom = ihnd;
+  assert(incom);
+
+  return (double)incom->data_len / (double)LISTEN_BUF_SIZE;
 }
