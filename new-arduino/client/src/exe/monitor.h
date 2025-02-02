@@ -3,13 +3,13 @@
 
 #include <adapt/client/listener.h>
 
-#include <stdatomic.h>
 #include <stdio.h>
 
-struct adptc_monitor_ctx {
-  FILE *file;
-};
+typedef void *adptc_monitor;
 
-void adptc_monitor(adptc_listener_receiver sender, void *user_ctx);
+adptc_monitor adptc_monitor_create(FILE *file);
+void adptc_monitor_destroy(adptc_monitor monitor);
+
+void adptc_monitor_callback(adptc_listener_incoming incoming, void *user_ctx);
 
 #endif // ADAPT_CLIENT_MONITOR_H

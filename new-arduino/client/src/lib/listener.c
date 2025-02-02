@@ -41,7 +41,7 @@ struct sender {
 
 struct receiver {
   struct channel *chan;
-  adptc_listener_routine user_fn;
+  adptc_listener_callback user_cb;
   void *user_ctx;
   atomic_flag continue_flag;
 };
@@ -68,13 +68,24 @@ struct listener {
   return lsnr;
 }
 
+static void check_listener(struct listener *const lsnr) {
+  assert(lsnr);
+  assert(lsnr->sndr.chan == &lsnr->chan);
+  assert(lsnr->rcvr.chan == &lsnr->chan);
+}
+
 void adptc_listener_destroy(adptc_listener lhnd) {
   struct listener *const lsnr = lhnd;
+  check_listener(lsnr);
+
   free(lsnr);
 }
 
+static void check_sender(struct sender *const sndr) { assert(sndr); }
+
 static void *sender_routine(void *const thread_arg) {
   struct sender *const sndr = thread_arg;
+  check_sender(sndr);
 
   // NOTE: this is a finite state machine.
 
@@ -171,8 +182,45 @@ static void *sender_routine(void *const thread_arg) {
   return NULL;
 }
 
+static struct incoming *accept_incoming(struct receiver *const rcvr) {
+  int pthread_res;
+
+  // Tell the sender thread
+  // that we are done using the previous incoming data.
+  atomic_flag_clear(&rcvr->chan->busy_flag);
+
+  bool should_continue;
+  while ((should_continue = atomic_flag_test_and_set(&rcvr->continue_flag)) &&
+         !atomic_load(&rcvr->chan->icmg_out_for_delivery)) {
+    // Wait until someone tells us to wake up.
+    // NOTE: waiting on a condition variable releases the lock,
+    //       allowing the sender thread to acquire it
+    //       and set the 'out-for-delivery' flag.
+    pthread_res =
+        pthread_cond_wait(&rcvr->chan->rcvr_has_work, &rcvr->chan->icmg_lock);
+    if (pthread_res != 0)
+      adptc_support_todo;
+  }
+
+  // The main thread has requested for us to exit.
+  // Return `NULL` so that the caller knows we are done.
+  if (!should_continue)
+    return NULL;
+
+  // Tell the sender thread that we received the delivery.
+  atomic_store(&rcvr->chan->icmg_out_for_delivery, false);
+
+  return &rcvr->chan->icmg;
+}
+
+static void check_receiver(struct receiver *const rcvr) {
+  assert(rcvr);
+  assert(rcvr->user_cb);
+}
+
 static void *receiver_routine(void *const thread_arg) {
   struct receiver *const rcvr = thread_arg;
+  check_receiver(rcvr);
 
   int pthread_res;
 
@@ -180,7 +228,9 @@ static void *receiver_routine(void *const thread_arg) {
   if (pthread_res != 0)
     adptc_support_todo;
 
-  rcvr->user_fn(rcvr, rcvr->user_ctx);
+  struct incoming *icmg;
+  while ((icmg = accept_incoming(rcvr)))
+    rcvr->user_cb(rcvr, rcvr->user_ctx);
 
   pthread_res = pthread_mutex_unlock(&rcvr->chan->icmg_lock);
   if (pthread_res != 0)
@@ -190,9 +240,10 @@ static void *receiver_routine(void *const thread_arg) {
 }
 
 void adptc_listener_start(adptc_listener const lhnd, int const serial_fd,
-                          adptc_listener_routine const user_fn,
+                          adptc_listener_callback const user_cb,
                           void *const user_ctx) {
   struct listener *const lsnr = lhnd;
+  check_listener(lsnr);
 
   int pthread_res;
 
@@ -228,7 +279,7 @@ void adptc_listener_start(adptc_listener const lhnd, int const serial_fd,
   if (pthread_res != 0)
     adptc_support_todo;
 
-  lsnr->rcvr.user_fn = user_fn;
+  lsnr->rcvr.user_cb = user_cb;
   lsnr->rcvr.user_ctx = user_ctx;
   pthread_res =
       pthread_create(&lsnr->rcvr_thread, NULL, receiver_routine, &lsnr->rcvr);
@@ -238,6 +289,7 @@ void adptc_listener_start(adptc_listener const lhnd, int const serial_fd,
 
 void adptc_listener_stop(adptc_listener const lhnd) {
   struct listener *const lsnr = lhnd;
+  check_listener(lsnr);
 
   int pthread_res;
 
@@ -274,43 +326,12 @@ void adptc_listener_stop(adptc_listener const lhnd) {
     adptc_support_todo;
 }
 
-adptc_listener_incoming
-adptc_listener_accept_incoming(adptc_listener_receiver const rhnd) {
-  struct receiver *const rcvr = rhnd;
-
-  int pthread_res;
-
-  // Tell the sender thread
-  // that we are done using the previous incoming data.
-  atomic_flag_clear(&rcvr->chan->busy_flag);
-
-  bool should_continue;
-  while ((should_continue = atomic_flag_test_and_set(&rcvr->continue_flag)) &&
-         !atomic_load(&rcvr->chan->icmg_out_for_delivery)) {
-    // Wait until someone tells us to wake up.
-    // NOTE: waiting on a condition variable releases the lock,
-    //       allowing the sender thread to acquire it
-    //       and set the 'out-for-delivery' flag.
-    pthread_res =
-        pthread_cond_wait(&rcvr->chan->rcvr_has_work, &rcvr->chan->icmg_lock);
-    if (pthread_res != 0)
-      adptc_support_todo;
-  }
-
-  // The main thread has requested for us to exit.
-  // Return `NULL` so that the caller knows we are done.
-  if (!should_continue)
-    return NULL;
-
-  // Tell the sender thread that we received the delivery.
-  atomic_store(&rcvr->chan->icmg_out_for_delivery, false);
-
-  return &rcvr->chan->icmg;
-}
+static void check_incoming(struct incoming *const icmg) { assert(icmg); }
 
 [[nodiscard]] unsigned char const *
 adptc_listener_get_incoming_data(adptc_listener_incoming const ihnd) {
   struct incoming *const icmg = ihnd;
+  check_incoming(icmg);
 
   return icmg->data_buf;
 }
@@ -318,6 +339,7 @@ adptc_listener_get_incoming_data(adptc_listener_incoming const ihnd) {
 [[nodiscard]] size_t
 adptc_listener_get_incoming_data_len(adptc_listener_incoming const ihnd) {
   struct incoming *const icmg = ihnd;
+  check_incoming(icmg);
 
   return icmg->data_len;
 }
@@ -325,6 +347,7 @@ adptc_listener_get_incoming_data_len(adptc_listener_incoming const ihnd) {
 [[nodiscard]] double
 adptc_listener_get_incoming_fill_ratio(adptc_listener_incoming const ihnd) {
   struct incoming *const icmg = ihnd;
+  check_incoming(icmg);
 
   return (double)icmg->data_len / (double)LISTENER_BUF_SIZE;
 }

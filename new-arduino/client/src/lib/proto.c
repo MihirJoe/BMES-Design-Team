@@ -9,6 +9,13 @@
 #include <assert.h>
 #include <limits.h>
 #include <math.h>
+#include <stdlib.h>
+
+struct response_decoder {
+  struct adptc_proto_response resp;
+  unsigned long marsh_float;
+  int rem_float_bytes;
+};
 
 static char const *const status_code_to_str[256] = {
     [adpt_proto_sc_force_measurement] = "force measurement.",
@@ -62,15 +69,36 @@ struct adptc_result adptc_proto_try_send_request(int const fd,
                             : sign * exp * coef;
 }
 
-void adptc_proto_init_response_decoder(
-    struct adptc_proto_response_decoder *const decdr) {
+adptc_proto_response_decoder adptc_proto_create_response_decoder(void) {
+  struct response_decoder *const decdr =
+      malloc(sizeof(struct response_decoder));
+  if (!decdr)
+    return NULL;
+
   decdr->marsh_float = 0;
   decdr->rem_float_bytes = 0;
+
+  return decdr;
 }
 
-struct adptc_proto_response const *adptc_proto_feed_response_decoder(
-    struct adptc_proto_response_decoder *const decdr,
-    unsigned char const byte) {
+static void check_response_decoder(struct response_decoder *const decdr) {
+  assert(decdr);
+}
+
+void adptc_proto_destroy_response_decoder(
+    adptc_proto_response_decoder const dhnd) {
+  struct response_decoder *const decdr = dhnd;
+  check_response_decoder(decdr);
+
+  free(decdr);
+}
+
+struct adptc_proto_response const *
+adptc_proto_feed_response_decoder(adptc_proto_response_decoder const dhnd,
+                                  unsigned char const byte) {
+  struct response_decoder *const decdr = dhnd;
+  check_response_decoder(decdr);
+
   if (decdr->rem_float_bytes > 0) {
     decdr->marsh_float <<= 8;
     decdr->marsh_float |= byte;
