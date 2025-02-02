@@ -1,8 +1,7 @@
-#include "proto.h"
+#include <adapt/client/proto.h>
 
-#include "result.h"
-#include "support.h"
-
+#include <adapt/client/result.h>
+#include <adapt/client/support.h>
 #include <adapt/proto.h>
 
 #include <unistd.h>
@@ -20,13 +19,14 @@ static char const *const status_code_to_str[256] = {
     [adpt_proto_sc_setting_up_hx711] = "setting up HX711...",
 };
 
-char const *adptc_proto_status_code_to_str(unsigned char const code) {
+[[nodiscard]] char const *
+adptc_proto_status_code_to_str(unsigned char const code) {
   char const *s = status_code_to_str[code & 0xff];
   return s ? s : "(unknown status)";
 }
 
-unsigned char adptc_proto_build_request(unsigned char const code,
-                                        unsigned char const body) {
+[[nodiscard]] unsigned char
+adptc_proto_build_request(unsigned char const code, unsigned char const body) {
   return (code << 5) | (body & 0x1f);
 }
 
@@ -41,9 +41,10 @@ struct adptc_result adptc_proto_try_send_request(int const fd,
   }
 }
 
-float adptc_proto_unmarshall_float(unsigned long const marsh) {
-  // This is quite explicit
-  // because the C Standard does not require `float` to be IEEE-754 `binary32`.
+[[nodiscard]] float adptc_proto_unmarshall_float(unsigned long const marsh) {
+  // NOTE: this is quite explicit
+  //       because the C Standard
+  //       does not require `float` to be IEEE-754 `binary32`.
 
   int const sign_bit = (marsh >> 31) & 1;
   int const sign = sign_bit ? -1 : 1;
@@ -63,8 +64,6 @@ float adptc_proto_unmarshall_float(unsigned long const marsh) {
 
 void adptc_proto_init_response_decoder(
     struct adptc_proto_response_decoder *const decdr) {
-  assert(decdr);
-
   decdr->marsh_float = 0;
   decdr->rem_float_bytes = 0;
 }
@@ -72,8 +71,6 @@ void adptc_proto_init_response_decoder(
 struct adptc_proto_response const *adptc_proto_feed_response_decoder(
     struct adptc_proto_response_decoder *const decdr,
     unsigned char const byte) {
-  assert(decdr);
-
   if (decdr->rem_float_bytes > 0) {
     decdr->marsh_float <<= 8;
     decdr->marsh_float |= byte;

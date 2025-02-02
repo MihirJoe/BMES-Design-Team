@@ -33,7 +33,7 @@ struct adptc_result {
   int os_code;
 };
 
-char const *adptc_result_kind_to_str(enum adptc_result_kind kind);
+[[nodiscard]] char const *adptc_result_kind_to_str(enum adptc_result_kind kind);
 void adptc_result_print(FILE *out, struct adptc_result res);
 
 #endif // ADAPT_CLIENT_RESULT_H

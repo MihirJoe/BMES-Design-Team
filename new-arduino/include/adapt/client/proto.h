@@ -1,7 +1,7 @@
 #ifndef ADAPT_CLIENT_PROTO_H
 #define ADAPT_CLIENT_PROTO_H
 
-#include "result.h"
+#include <adapt/client/result.h>
 
 union adptc_proto_response_body {
   struct {
@@ -20,10 +20,14 @@ struct adptc_proto_response_decoder {
   int rem_float_bytes;
 };
 
-char const *adptc_proto_status_code_to_str(unsigned char code);
-unsigned char adptc_proto_build_request(unsigned char code, unsigned char body);
+[[nodiscard]] char const *adptc_proto_status_code_to_str(unsigned char code);
+
+[[nodiscard]] unsigned char adptc_proto_build_request(unsigned char code,
+                                                      unsigned char body);
 struct adptc_result adptc_proto_try_send_request(int fd, unsigned char req);
-float adptc_proto_unmarshall_float(unsigned long marsh);
+
+[[nodiscard]] float adptc_proto_unmarshall_float(unsigned long marsh);
+
 void adptc_proto_init_response_decoder(
     struct adptc_proto_response_decoder *decdr);
 struct adptc_proto_response const *

@@ -1,6 +1,6 @@
 #include "cli.h"
 
-#include "support.h"
+#include <adapt/client/support.h>
 
 #include <getopt.h>
 
@@ -15,8 +15,6 @@ static struct option const long_options[] = {
 
 void adptc_cli_parse_args(int const argc, char *argv[const],
                           struct adptc_cli_config *const config) {
-  assert(config);
-
   config->serial_path = NULL;
   config->monitor_path = NULL;
 

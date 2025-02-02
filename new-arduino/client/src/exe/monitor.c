@@ -1,27 +1,25 @@
 #include "monitor.h"
 
-#include "listen.h"
-#include "proto.h"
-
+#include <adapt/client/listener.h>
+#include <adapt/client/proto.h>
 #include <adapt/proto.h>
 
 #include <assert.h>
 #include <stdio.h>
 
-void adptc_monitor(adptc_listen_sender const sender, void *user_ctx) {
+void adptc_monitor(adptc_listener_receiver const rcvr, void *user_ctx) {
   struct adptc_monitor_ctx *const ctx = user_ctx;
-  assert(ctx);
-  assert(ctx->file);
 
   struct adptc_proto_response_decoder resp_decdr;
   adptc_proto_init_response_decoder(&resp_decdr);
 
-  adptc_listen_incoming incom;
-  while ((incom = adptc_listen_accept_incoming(sender))) {
+  adptc_listener_incoming icmg;
+  while ((icmg = adptc_listener_accept_incoming(rcvr))) {
     unsigned char const *const incom_data =
-        adptc_listen_get_incoming_data(incom);
-    size_t const incom_data_len = adptc_listen_get_incoming_data_len(incom);
-    double const incom_fill_ratio = adptc_listen_get_incoming_fill_ratio(incom);
+        adptc_listener_get_incoming_data(icmg);
+    size_t const incom_data_len = adptc_listener_get_incoming_data_len(icmg);
+    double const incom_fill_ratio =
+        adptc_listener_get_incoming_fill_ratio(icmg);
 
     fprintf(ctx->file, "fill: %lf%%\n", incom_fill_ratio);
 

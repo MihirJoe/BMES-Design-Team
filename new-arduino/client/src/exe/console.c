@@ -1,7 +1,7 @@
 #include "console.h"
 
-#include "proto.h"
-#include "result.h"
+#include <adapt/client/proto.h>
+#include <adapt/client/result.h>
 
 #include <adapt/proto.h>
 

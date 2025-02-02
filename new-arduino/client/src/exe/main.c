@@ -1,9 +1,10 @@
 #include "cli.h"
 #include "console.h"
-#include "listen.h"
 #include "monitor.h"
-#include "result.h"
-#include "serial.h"
+
+#include <adapt/client/listener.h>
+#include <adapt/client/result.h>
+#include <adapt/client/serial.h>
 
 #include <fcntl.h>
 #include <pthread.h>
@@ -48,8 +49,8 @@ int main(int const argc, char *argv[const]) {
 
   struct adptc_monitor_ctx mon_user_ctx = {.file = monitor_file};
 
-  adptc_listen const listen = adptc_listen_create();
-  adptc_listen_start(listen, serial_fd, adptc_monitor, &mon_user_ctx);
+  adptc_listener const listener = adptc_listener_create();
+  adptc_listener_start(listener, serial_fd, adptc_monitor, &mon_user_ctx);
 
   aptc_res = adptc_console_attend(serial_fd);
   if (!ADPTC_RESULT_IS_OK(aptc_res)) {
@@ -60,8 +61,8 @@ int main(int const argc, char *argv[const]) {
     return EXIT_FAILURE;
   }
 
-  adptc_listen_stop(listen);
-  adptc_listen_destroy(listen);
+  adptc_listener_stop(listener);
+  adptc_listener_destroy(listener);
 
   // Clean up resources.
   fclose(monitor_file);

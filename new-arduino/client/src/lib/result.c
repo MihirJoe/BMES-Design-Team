@@ -1,4 +1,4 @@
-#include "result.h"
+#include <adapt/client/result.h>
 
 #include <assert.h>
 #include <string.h>
@@ -16,7 +16,8 @@ static char const *const kind_to_str[] = {
     [adptc_result_k_serial_setattr_error] = "tcsetattr()",
 };
 
-char const *adptc_result_kind_to_str(enum adptc_result_kind const kind) {
+[[nodiscard]] char const *
+adptc_result_kind_to_str(enum adptc_result_kind const kind) {
   assert(kind < RESULT_KIND_COUNT);
   assert(kind_to_str[kind]);
 
@@ -24,10 +25,7 @@ char const *adptc_result_kind_to_str(enum adptc_result_kind const kind) {
 }
 
 void adptc_result_print(FILE *const out, struct adptc_result const res) {
-  assert(out);
-
   char const *const kind_str = adptc_result_kind_to_str(res.kind);
-  assert(kind_str);
 
   fprintf(out, "%s", kind_str);
   if (res.os_code)

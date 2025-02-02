@@ -1,15 +1,12 @@
 # To-do
 
-- In the `listen` module,
-  rename 'monitor' to 'receiver'
-  to make clear that 'receiver' is an interface
-  and not tied to the `monitor` module implementation.
+- Finish Python bindings.
+  In particular, finish the `_adapt_client` extension module
+  and then create a higher-level `adapt_client` module in Python.
 
-- Replace GNU Make with *meson*.
-
-- Separate program into application and library componenents.
-
-- Make Python bindings.
+- Replace `adptc_listener_routine` with `adptc_listener_callback`
+  that is called when incoming data is available.
+  This is a better design, for multiple reasons.
 
 - Un-unify the result types
   but make it easier to define new result types

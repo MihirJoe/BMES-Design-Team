@@ -20,9 +20,9 @@
 
 void adptc_support_debug_internal(char const *file_name, long line_num,
                                   char const *fmt, ...);
-_Noreturn void adptc_support_panic_internal(char const *file_name,
-                                            long line_num,
-                                            char const *func_name,
-                                            char const *fmt, ...);
+[[noreturn]] void adptc_support_panic_internal(char const *file_name,
+                                               long line_num,
+                                               char const *func_name,
+                                               char const *fmt, ...);
 
 #endif // ADAPT_CLIENT_SUPPORT_H

@@ -3,7 +3,7 @@
 #ifndef ADAPT_CLIENT_SERIAL_H
 #define ADAPT_CLIENT_SERIAL_H
 
-#include "result.h"
+#include <adapt/client/result.h>
 
 struct adptc_result adptc_serial_try_configure(int fd);
 

@@ -1,7 +1,6 @@
-#include "serial.h"
+#include <adapt/client/serial.h>
 
-#include "result.h"
-
+#include <adapt/client/result.h>
 #include <adapt/proto.h>
 
 #include <termios.h>
@@ -18,8 +17,6 @@
 
 static struct adptc_result try_get_attr(int const fd,
                                         struct termios *const tty) {
-  assert(tty);
-
   if (tcgetattr(fd, tty) == -1)
     return ADPTC_OS_RESULT(serial_getattr_error);
 
@@ -27,8 +24,6 @@ static struct adptc_result try_get_attr(int const fd,
 }
 
 static void configure_input_modes(tcflag_t *const iflag) {
-  assert(iflag);
-
   // TODO: what about frame and parity errors?
 
   // Disable input manipulation.
@@ -36,15 +31,11 @@ static void configure_input_modes(tcflag_t *const iflag) {
 }
 
 static void configure_output_modes(tcflag_t *const oflag) {
-  assert(oflag);
-
   // Disable output manipulation.
   *oflag &= ~(OPOST | ONLCR | OCRNL);
 }
 
 static void configure_control_modes(tcflag_t *const cflag) {
-  assert(cflag);
-
   // The character size is 8 bits.
   *cflag &= ~CSIZE;
   *cflag |= CS8;
@@ -61,8 +52,6 @@ static void configure_control_modes(tcflag_t *const cflag) {
 }
 
 static void configure_local_modes(tcflag_t *const lflag) {
-  assert(lflag);
-
   // Don't generate signals.
   *lflag &= ~ISIG;
   // Disable canonical mode.
@@ -72,8 +61,6 @@ static void configure_local_modes(tcflag_t *const lflag) {
 }
 
 static void configure_special_chars(cc_t cc[]) {
-  assert(cc);
-
   // Impose no lower bound on the read amount...
   cc[VMIN] = 0;
   // ...but reads timeout after 100 ms.
@@ -81,8 +68,6 @@ static void configure_special_chars(cc_t cc[]) {
 }
 
 static struct adptc_result try_set_speed(struct termios *const tty) {
-  assert(tty);
-
   if (cfsetispeed(tty, SERIAL_SPEED) == -1)
     return ADPTC_OS_RESULT(serial_setispeed_error);
   if (cfsetospeed(tty, SERIAL_SPEED) == -1)
@@ -93,20 +78,18 @@ static struct adptc_result try_set_speed(struct termios *const tty) {
 
 static struct adptc_result try_set_attr(int const fd,
                                         struct termios *const tty) {
-  assert(tty);
-
   if (tcsetattr(fd, TCSANOW, tty) == -1)
     return ADPTC_OS_RESULT(serial_setattr_error);
 
-  // From `man 3 termios`:
-  //   Note that tcsetattr() returns success if any of the requested
-  //   changes could be successfully carried out. Therefore, when
-  //   making multiple changes it may be necessary to follow this call
-  //   with a further call to tcgetattr() to check that all changes
-  //   have been performed successfully.
-
-  // Because this is a simple, one-off client program,
-  // we will not perform any such verification.
+  // NOTE: from `man 3 termios`:
+  //         Note that tcsetattr() returns success if any of the requested
+  //         changes could be successfully carried out. Therefore, when
+  //         making multiple changes it may be necessary to follow this call
+  //         with a further call to tcgetattr() to check that all changes
+  //         have been performed successfully.
+  //
+  //       Because this is a simple, one-off client program,
+  //       we will not perform any such verification.
 
   return ADPTC_OK_RESULT;
 }

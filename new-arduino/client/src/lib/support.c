@@ -1,4 +1,4 @@
-#include "support.h"
+#include <adapt/client/support.h>
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -17,10 +17,10 @@ void adptc_support_debug_internal(char const *const file_name,
   va_end(ap);
 }
 
-_Noreturn void adptc_support_panic_internal(char const *const file_name,
-                                            long const line_num,
-                                            char const *const func_name,
-                                            char const *const fmt, ...) {
+[[noreturn]] void adptc_support_panic_internal(char const *const file_name,
+                                               long const line_num,
+                                               char const *const func_name,
+                                               char const *const fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
 
