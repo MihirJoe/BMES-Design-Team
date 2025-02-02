@@ -1,3 +1,6 @@
+/// \file
+/// \brief The serial input monitor.
+
 #ifndef ADAPT_CLIENT_MONITOR_H
 #define ADAPT_CLIENT_MONITOR_H
 

@@ -36,29 +36,13 @@ int main(int const argc, char *argv[const]) {
     return EXIT_FAILURE;
   }
 
-  struct adptc_result aptc_res;
-
-  aptc_res = adptc_serial_try_configure(serial_fd);
-  if (!ADPTC_RESULT_IS_OK(aptc_res)) {
-    fprintf(stderr, "fatal error: ");
-    adptc_result_print(stderr, aptc_res);
-    fprintf(stderr, "\n");
-    close(serial_fd);
-    return EXIT_FAILURE;
-  }
+  adptc_serial_try_configure(serial_fd);
 
   adptc_monitor const monitor = adptc_monitor_create(monitor_file);
   adptc_listener const listener = adptc_listener_create();
   adptc_listener_start(listener, serial_fd, adptc_monitor_callback, monitor);
 
-  aptc_res = adptc_console_attend(serial_fd);
-  if (!ADPTC_RESULT_IS_OK(aptc_res)) {
-    fprintf(stderr, "fatal error: ");
-    adptc_result_print(stderr, aptc_res);
-    fprintf(stderr, "\n");
-    close(serial_fd);
-    return EXIT_FAILURE;
-  }
+  adptc_console_try_attend(serial_fd);
 
   adptc_listener_stop(listener);
   adptc_listener_destroy(listener);

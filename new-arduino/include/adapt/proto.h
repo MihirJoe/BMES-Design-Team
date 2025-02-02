@@ -1,6 +1,10 @@
+/// \file
+/// \brief ADAPT protocol definitions.
+
 #ifndef ADAPT_PROTO_H
 #define ADAPT_PROTO_H
 
+/// \brief The baud (bits per second) of the ADAPT serial interface.
 #define ADPT_PROTO_SERIAL_BAUD 115200l
 
 // Request codes.

@@ -1,3 +1,5 @@
+/// \file
+
 #ifndef ADAPT_CLIENT_CLI_H
 #define ADAPT_CLIENT_CLI_H
 

@@ -1,7 +1,7 @@
 lib_srcs = files(
   'listener.c',
+  'os.c',
   'proto.c',
-  'result.c',
   'serial.c',
   'support.c',
 )

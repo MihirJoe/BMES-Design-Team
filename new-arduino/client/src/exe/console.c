@@ -1,3 +1,5 @@
+/// \file
+
 #include "console.h"
 
 #include <adapt/client/proto.h>
@@ -15,11 +17,13 @@
 
 #define CONSOLE_INPUT_BUF_SIZE 32
 
+/// \internal
 struct request_def {
   char const *name;
   unsigned char code;
 };
 
+/// \internal
 static struct request_def const request_defs[] = {
     {.name = "ela8", .code = adpt_proto_rc_extend_lin_act_8},
     {.name = "ela512", .code = adpt_proto_rc_extend_lin_act_512},
@@ -29,6 +33,7 @@ static struct request_def const request_defs[] = {
     {.name = "rla512", .code = adpt_proto_rc_retract_lin_act_512},
 };
 
+/// \internal
 static struct request_def const *find_request_def(char const *const name) {
   size_t i = 0;
   while (i < sizeof(request_defs) / sizeof(request_defs[0])) {
@@ -43,6 +48,7 @@ static struct request_def const *find_request_def(char const *const name) {
   return NULL;
 }
 
+/// \internal
 static void process_line(int const serial_fd, char const *const line) {
   struct request_def const *const def = find_request_def(line);
   if (!def) {
@@ -56,13 +62,13 @@ static void process_line(int const serial_fd, char const *const line) {
   adptc_proto_try_send_request(serial_fd, req);
 }
 
-struct adptc_result adptc_console_attend(int const serial_fd) {
+adptc_console_attend_result adptc_console_try_attend(int const serial_fd) {
   char input_buf[CONSOLE_INPUT_BUF_SIZE];
   while (printf("> "), fgets(input_buf, sizeof(input_buf), stdin))
     process_line(serial_fd, input_buf);
 
   if (ferror(stdin))
-    return ADPTC_OTHER_RESULT(console_fgets_error);
+    return adptc_result_error(console_attend, stdin);
 
-  return ADPTC_OK_RESULT;
+  return adptc_result_ok(console_attend);
 }

@@ -1,3 +1,5 @@
+/// \file
+
 #include <adapt/client/serial.h>
 
 #include <adapt/client/result.h>
@@ -15,14 +17,35 @@
 #error "unsupported serial baud"
 #endif
 
-static struct adptc_result try_get_attr(int const fd,
-                                        struct termios *const tty) {
+/// \internal
+static adptc_serial_configure_result try_get_attr(int const fd,
+                                                  struct termios *const tty) {
   if (tcgetattr(fd, tty) == -1)
-    return ADPTC_OS_RESULT(serial_getattr_error);
+    return adptc_result_os_error(serial_configure, tcgetattr, tcgetattr);
 
-  return ADPTC_OK_RESULT;
+  return adptc_result_ok(serial_configure);
 }
 
+/// \internal
+static adptc_serial_configure_result try_set_attr(int const fd,
+                                                  struct termios *const tty) {
+  if (tcsetattr(fd, TCSANOW, tty) == -1)
+    return adptc_result_os_error(serial_configure, tcsetattr, tcsetattr);
+
+  // NOTE: from `man 3 termios`:
+  //         Note that tcsetattr() returns success if any of the requested
+  //         changes could be successfully carried out. Therefore, when
+  //         making multiple changes it may be necessary to follow this call
+  //         with a further call to tcgetattr() to check that all changes
+  //         have been performed successfully.
+  //
+  //       Because this is a simple, one-off client program,
+  //       we will not perform any such verification.
+
+  return adptc_result_ok(serial_configure);
+}
+
+/// \internal
 static void configure_input_modes(tcflag_t *const iflag) {
   // TODO: what about frame and parity errors?
 
@@ -30,11 +53,13 @@ static void configure_input_modes(tcflag_t *const iflag) {
   *iflag &= ~(ISTRIP | INLCR | IGNCR | IXON | IXOFF);
 }
 
+/// \internal
 static void configure_output_modes(tcflag_t *const oflag) {
   // Disable output manipulation.
   *oflag &= ~(OPOST | ONLCR | OCRNL);
 }
 
+/// \internal
 static void configure_control_modes(tcflag_t *const cflag) {
   // The character size is 8 bits.
   *cflag &= ~CSIZE;
@@ -51,6 +76,7 @@ static void configure_control_modes(tcflag_t *const cflag) {
   *cflag |= CLOCAL;
 }
 
+/// \internal
 static void configure_local_modes(tcflag_t *const lflag) {
   // Don't generate signals.
   *lflag &= ~ISIG;
@@ -60,46 +86,30 @@ static void configure_local_modes(tcflag_t *const lflag) {
   *lflag &= ~ECHO;
 }
 
-static void configure_special_chars(cc_t cc[]) {
+/// \internal
+static void configure_special_chars(cc_t cc[const]) {
   // Impose no lower bound on the read amount...
   cc[VMIN] = 0;
   // ...but reads timeout after 100 ms.
   cc[VTIME] = 1;
 }
 
-static struct adptc_result try_set_speed(struct termios *const tty) {
+/// \internal
+static adptc_serial_configure_result try_set_speed(struct termios *const tty) {
   if (cfsetispeed(tty, SERIAL_SPEED) == -1)
-    return ADPTC_OS_RESULT(serial_setispeed_error);
+    return adptc_result_os_error(serial_configure, cfsetispeed, cfsetispeed);
   if (cfsetospeed(tty, SERIAL_SPEED) == -1)
-    return ADPTC_OS_RESULT(serial_setospeed_error);
+    return adptc_result_os_error(serial_configure, cfsetospeed, cfsetospeed);
 
-  return ADPTC_OK_RESULT;
+  return adptc_result_ok(serial_configure);
 }
 
-static struct adptc_result try_set_attr(int const fd,
-                                        struct termios *const tty) {
-  if (tcsetattr(fd, TCSANOW, tty) == -1)
-    return ADPTC_OS_RESULT(serial_setattr_error);
-
-  // NOTE: from `man 3 termios`:
-  //         Note that tcsetattr() returns success if any of the requested
-  //         changes could be successfully carried out. Therefore, when
-  //         making multiple changes it may be necessary to follow this call
-  //         with a further call to tcgetattr() to check that all changes
-  //         have been performed successfully.
-  //
-  //       Because this is a simple, one-off client program,
-  //       we will not perform any such verification.
-
-  return ADPTC_OK_RESULT;
-}
-
-struct adptc_result adptc_serial_try_configure(int const fd) {
-  struct adptc_result res = ADPTC_OK_RESULT;
+adptc_serial_configure_result adptc_serial_try_configure(int const fd) {
+  adptc_serial_configure_result res;
 
   struct termios tty;
   res = try_get_attr(fd, &tty);
-  if (!ADPTC_RESULT_IS_OK(res))
+  if (!adptc_result_is_ok(res))
     goto done;
 
   configure_input_modes(&tty.c_iflag);
@@ -109,11 +119,11 @@ struct adptc_result adptc_serial_try_configure(int const fd) {
   configure_special_chars(tty.c_cc);
 
   res = try_set_speed(&tty);
-  if (!ADPTC_RESULT_IS_OK(res))
+  if (!adptc_result_is_ok(res))
     goto done;
 
   res = try_set_attr(fd, &tty);
-  if (!ADPTC_RESULT_IS_OK(res))
+  if (!adptc_result_is_ok(res))
     goto done;
 
 done:

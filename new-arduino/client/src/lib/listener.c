@@ -1,3 +1,5 @@
+/// \file
+
 #include <adapt/client/listener.h>
 
 #include <adapt/client/support.h>
@@ -19,11 +21,13 @@
 //       is exactly 1440.
 #define LISTENER_BUF_SIZE 1440
 
+/// \internal
 struct incoming {
   unsigned char data_buf[LISTENER_BUF_SIZE];
   size_t data_len;
 };
 
+/// \internal
 struct channel {
   struct incoming icmg;
   unsigned char read_buf[LISTENER_BUF_SIZE];
@@ -33,19 +37,22 @@ struct channel {
   pthread_cond_t rcvr_has_work;
 };
 
+/// \internal
 struct sender {
   struct channel *chan;
   int serial_fd;
   atomic_flag continue_flag;
 };
 
+/// \internal
 struct receiver {
   struct channel *chan;
   adptc_listener_callback user_cb;
-  void *user_ctx;
+  void *user_cb_env;
   atomic_flag continue_flag;
 };
 
+/// \internal
 struct listener {
   struct channel chan;
   struct sender sndr;
@@ -68,6 +75,7 @@ struct listener {
   return lsnr;
 }
 
+/// \internal
 static void check_listener(struct listener *const lsnr) {
   assert(lsnr);
   assert(lsnr->sndr.chan == &lsnr->chan);
@@ -81,8 +89,10 @@ void adptc_listener_destroy(adptc_listener lhnd) {
   free(lsnr);
 }
 
+/// \internal
 static void check_sender(struct sender *const sndr) { assert(sndr); }
 
+/// \internal
 static void *sender_routine(void *const thread_arg) {
   struct sender *const sndr = thread_arg;
   check_sender(sndr);
@@ -98,7 +108,6 @@ static void *sender_routine(void *const thread_arg) {
   int pthread_res;
 
   enum state state = state_read;
-  ssize_t read_res;
 
   // NOTE: in-between states,
   //       check the 'continue' flag.
@@ -106,11 +115,8 @@ static void *sender_routine(void *const thread_arg) {
   while (atomic_flag_test_and_set(&sndr->continue_flag)) {
     switch (state) {
     case state_read:
-      // NOTE: we don't read directly into the 'incoming' structure
-      //       because we plan to begin the next read
-      //       while the receiver thread
-      //       is processing the previous incoming data.
-      read_res = read(sndr->serial_fd, sndr->chan->read_buf, LISTENER_BUF_SIZE);
+      ssize_t read_res =
+          read(sndr->serial_fd, sndr->chan->read_buf, LISTENER_BUF_SIZE);
       if (read_res <= 0)
         // TODO
         read_res = 0;
@@ -182,6 +188,7 @@ static void *sender_routine(void *const thread_arg) {
   return NULL;
 }
 
+/// \internal
 static struct incoming *accept_incoming(struct receiver *const rcvr) {
   int pthread_res;
 
@@ -213,11 +220,13 @@ static struct incoming *accept_incoming(struct receiver *const rcvr) {
   return &rcvr->chan->icmg;
 }
 
+/// \internal
 static void check_receiver(struct receiver *const rcvr) {
   assert(rcvr);
   assert(rcvr->user_cb);
 }
 
+/// \internal
 static void *receiver_routine(void *const thread_arg) {
   struct receiver *const rcvr = thread_arg;
   check_receiver(rcvr);
@@ -230,7 +239,7 @@ static void *receiver_routine(void *const thread_arg) {
 
   struct incoming *icmg;
   while ((icmg = accept_incoming(rcvr)))
-    rcvr->user_cb(rcvr, rcvr->user_ctx);
+    rcvr->user_cb(icmg, rcvr->user_cb_env);
 
   pthread_res = pthread_mutex_unlock(&rcvr->chan->icmg_lock);
   if (pthread_res != 0)
@@ -241,7 +250,7 @@ static void *receiver_routine(void *const thread_arg) {
 
 void adptc_listener_start(adptc_listener const lhnd, int const serial_fd,
                           adptc_listener_callback const user_cb,
-                          void *const user_ctx) {
+                          void *const user_cb_env) {
   struct listener *const lsnr = lhnd;
   check_listener(lsnr);
 
@@ -280,7 +289,7 @@ void adptc_listener_start(adptc_listener const lhnd, int const serial_fd,
     adptc_support_todo;
 
   lsnr->rcvr.user_cb = user_cb;
-  lsnr->rcvr.user_ctx = user_ctx;
+  lsnr->rcvr.user_cb_env = user_cb_env;
   pthread_res =
       pthread_create(&lsnr->rcvr_thread, NULL, receiver_routine, &lsnr->rcvr);
   if (pthread_res != 0)
@@ -326,6 +335,7 @@ void adptc_listener_stop(adptc_listener const lhnd) {
     adptc_support_todo;
 }
 
+/// \internal
 static void check_incoming(struct incoming *const icmg) { assert(icmg); }
 
 [[nodiscard]] unsigned char const *

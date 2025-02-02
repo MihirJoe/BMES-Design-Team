@@ -1,3 +1,5 @@
+/// \file
+
 #include <adapt/client/proto.h>
 
 #include <adapt/client/result.h>
@@ -11,12 +13,14 @@
 #include <math.h>
 #include <stdlib.h>
 
+/// \internal
 struct response_decoder {
   struct adptc_proto_response resp;
   unsigned long marsh_float;
   int rem_float_bytes;
 };
 
+/// \internal
 static char const *const status_code_to_str[256] = {
     [adpt_proto_sc_force_measurement] = "force measurement.",
     [adpt_proto_sc_request_received] = "request received.",
@@ -37,15 +41,13 @@ adptc_proto_build_request(unsigned char const code, unsigned char const body) {
   return (code << 5) | (body & 0x1f);
 }
 
-struct adptc_result adptc_proto_try_send_request(int const fd,
-                                                 unsigned char const req) {
+adptc_proto_send_request_result
+adptc_proto_try_send_request(int const fd, unsigned char const req) {
   ssize_t const write_res = write(fd, &req, 1);
-  switch (write_res) {
-  case -1: return ADPTC_OS_RESULT(proto_write_error);
-  case 0: return ADPTC_OTHER_RESULT(proto_partial_write);
-  case 1: return ADPTC_OK_RESULT;
-  default: adptc_support_todo;
-  }
+  if (write_res != 1)
+    return adptc_result_os_error(proto_send_request, write, write);
+
+  return adptc_result_ok(proto_send_request);
 }
 
 [[nodiscard]] float adptc_proto_unmarshall_float(unsigned long const marsh) {
@@ -81,6 +83,7 @@ adptc_proto_response_decoder adptc_proto_create_response_decoder(void) {
   return decdr;
 }
 
+/// \internal
 static void check_response_decoder(struct response_decoder *const decdr) {
   assert(decdr);
 }

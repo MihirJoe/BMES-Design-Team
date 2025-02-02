@@ -125,18 +125,19 @@ static PyMethodDef Listener_method_list[] = {{.ml_name = "stop",
 
 static PyTypeObject IncomingType = {
     // clang-format off
-    .ob_base = PyVarObject_HEAD_INIT(NULL, 0)
+    PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "_adapt_client.Incoming",
     .tp_basicsize = sizeof(IncomingObject),
     .tp_dealloc = Incoming_dealloc,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_DISALLOW_INSTANTIATION,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
+                Py_TPFLAGS_DISALLOW_INSTANTIATION,
     .tp_doc = PyDoc_STR("Incoming"),
     // clang-format on
 };
 
 static PyTypeObject ListenerType = {
     // clang-format off
-    .ob_base = PyVarObject_HEAD_INIT(NULL, 0)
+    PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "_adapt_client.Listener",
     .tp_basicsize = sizeof(ListenerObject),
     .tp_dealloc = Listener_dealloc,
