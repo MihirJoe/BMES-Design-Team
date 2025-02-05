@@ -9,7 +9,6 @@
 #include <assert.h>
 #include <stddef.h>
 
-/// \internal
 static struct option const long_options[] = {
     {.name = "help", .has_arg = no_argument, .flag = NULL, .val = 'h'},
     {.name = "serial", .has_arg = required_argument, .flag = NULL, .val = 's'},

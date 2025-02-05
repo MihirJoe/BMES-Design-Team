@@ -1,4 +1,4 @@
-lib_srcs = files(
+libclient_srcs = files(
   'listener.c',
   'os.c',
   'proto.c',

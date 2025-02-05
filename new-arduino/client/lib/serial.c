@@ -17,7 +17,6 @@
 #error "unsupported serial baud"
 #endif
 
-/// \internal
 static adptc_serial_configure_result try_get_attr(int const fd,
                                                   struct termios *const tty) {
   if (tcgetattr(fd, tty) == -1)
@@ -26,7 +25,6 @@ static adptc_serial_configure_result try_get_attr(int const fd,
   return adptc_result_ok(serial_configure);
 }
 
-/// \internal
 static adptc_serial_configure_result try_set_attr(int const fd,
                                                   struct termios *const tty) {
   if (tcsetattr(fd, TCSANOW, tty) == -1)
@@ -45,7 +43,6 @@ static adptc_serial_configure_result try_set_attr(int const fd,
   return adptc_result_ok(serial_configure);
 }
 
-/// \internal
 static void configure_input_modes(tcflag_t *const iflag) {
   // TODO: what about frame and parity errors?
 
@@ -53,13 +50,11 @@ static void configure_input_modes(tcflag_t *const iflag) {
   *iflag &= ~(ISTRIP | INLCR | IGNCR | IXON | IXOFF);
 }
 
-/// \internal
 static void configure_output_modes(tcflag_t *const oflag) {
   // Disable output manipulation.
   *oflag &= ~(OPOST | ONLCR | OCRNL);
 }
 
-/// \internal
 static void configure_control_modes(tcflag_t *const cflag) {
   // The character size is 8 bits.
   *cflag &= ~CSIZE;
@@ -76,7 +71,6 @@ static void configure_control_modes(tcflag_t *const cflag) {
   *cflag |= CLOCAL;
 }
 
-/// \internal
 static void configure_local_modes(tcflag_t *const lflag) {
   // Don't generate signals.
   *lflag &= ~ISIG;
@@ -86,7 +80,6 @@ static void configure_local_modes(tcflag_t *const lflag) {
   *lflag &= ~ECHO;
 }
 
-/// \internal
 static void configure_special_chars(cc_t cc[const]) {
   // Impose no lower bound on the read amount...
   cc[VMIN] = 0;
@@ -94,7 +87,6 @@ static void configure_special_chars(cc_t cc[const]) {
   cc[VTIME] = 1;
 }
 
-/// \internal
 static adptc_serial_configure_result try_set_speed(struct termios *const tty) {
   if (cfsetispeed(tty, SERIAL_SPEED) == -1)
     return adptc_result_os_error(serial_configure, cfsetispeed, cfsetispeed);

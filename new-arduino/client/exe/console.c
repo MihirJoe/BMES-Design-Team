@@ -17,13 +17,11 @@
 
 #define CONSOLE_INPUT_BUF_SIZE 32
 
-/// \internal
 struct request_def {
   char const *name;
   unsigned char code;
 };
 
-/// \internal
 static struct request_def const request_defs[] = {
     {.name = "ela8", .code = adpt_proto_rc_extend_lin_act_8},
     {.name = "ela512", .code = adpt_proto_rc_extend_lin_act_512},
@@ -33,7 +31,6 @@ static struct request_def const request_defs[] = {
     {.name = "rla512", .code = adpt_proto_rc_retract_lin_act_512},
 };
 
-/// \internal
 static struct request_def const *find_request_def(char const *const name) {
   size_t i = 0;
   while (i < sizeof(request_defs) / sizeof(request_defs[0])) {
@@ -48,7 +45,6 @@ static struct request_def const *find_request_def(char const *const name) {
   return NULL;
 }
 
-/// \internal
 static void process_line(int const serial_fd, char const *const line) {
   struct request_def const *const def = find_request_def(line);
   if (!def) {

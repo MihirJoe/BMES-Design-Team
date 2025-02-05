@@ -1,4 +1,6 @@
 /// \file
+/// \brief
+/// Facilities for defining result types.
 
 #ifndef ADAPT_CLIENT_RESULT_H
 #define ADAPT_CLIENT_RESULT_H

@@ -1,3 +1,5 @@
+/// \file
+
 #ifndef ADAPT_SKETCH_LINEARACTUATOR_HPP
 #define ADAPT_SKETCH_LINEARACTUATOR_HPP
 
@@ -5,7 +7,8 @@
 
 namespace adpts {
 
-/// \brief The linear actuator.
+/// \brief
+/// The linear actuator.
 class LinearActuator {
 private:
   enum class Direction {
@@ -13,7 +16,8 @@ private:
     Out = 1,
   };
 
-  /// \brief The value of millis when the current motion started.
+  /// \brief
+  /// The value of millis when the current motion started.
   ///
   /// This value is used to determine motion completion.
   ///

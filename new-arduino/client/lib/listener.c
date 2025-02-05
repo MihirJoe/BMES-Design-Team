@@ -14,20 +14,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-// NOTE: for a baud of 115200
-//       (the maximum we will support),
-//       the theoretical maximum number of bytes
-//       the Arduino can transmit in one decisecond (100 ms)
-//       is exactly 1440.
-#define LISTENER_BUF_SIZE 1440
+#define LISTENER_BUF_SIZE 1024
 
-/// \internal
 struct incoming {
-  unsigned char data_buf[LISTENER_BUF_SIZE];
-  size_t data_len;
+  unsigned char buf[LISTENER_BUF_SIZE];
+  size_t len;
 };
 
-/// \internal
 struct channel {
   struct incoming icmg;
   unsigned char read_buf[LISTENER_BUF_SIZE];
@@ -37,14 +30,12 @@ struct channel {
   pthread_cond_t rcvr_has_work;
 };
 
-/// \internal
 struct sender {
   struct channel *chan;
   int serial_fd;
   atomic_flag continue_flag;
 };
 
-/// \internal
 struct receiver {
   struct channel *chan;
   adptc_listener_callback user_cb;
@@ -52,7 +43,6 @@ struct receiver {
   atomic_flag continue_flag;
 };
 
-/// \internal
 struct listener {
   struct channel chan;
   struct sender sndr;
@@ -60,6 +50,8 @@ struct listener {
   pthread_t sndr_thread;
   pthread_t rcvr_thread;
 };
+
+size_t const adptc_listener_incoming_buf_size = LISTENER_BUF_SIZE;
 
 [[nodiscard]] adptc_listener adptc_listener_create(void) {
   struct listener *const lsnr = malloc(sizeof(struct listener));
@@ -75,7 +67,6 @@ struct listener {
   return lsnr;
 }
 
-/// \internal
 static void check_listener(struct listener *const lsnr) {
   assert(lsnr);
   assert(lsnr->sndr.chan == &lsnr->chan);
@@ -89,10 +80,8 @@ void adptc_listener_destroy(adptc_listener lhnd) {
   free(lsnr);
 }
 
-/// \internal
 static void check_sender(struct sender *const sndr) { assert(sndr); }
 
-/// \internal
 static void *sender_routine(void *const thread_arg) {
   struct sender *const sndr = thread_arg;
   check_sender(sndr);
@@ -150,8 +139,8 @@ static void *sender_routine(void *const thread_arg) {
       //       indicates that the receiver thread
       //       is not using the 'incoming' structure.
       size_t const read_len = read_res;
-      memcpy(sndr->chan->icmg.data_buf, sndr->chan->read_buf, read_len);
-      sndr->chan->icmg.data_len = read_len;
+      memcpy(sndr->chan->icmg.buf, sndr->chan->read_buf, read_len);
+      sndr->chan->icmg.len = read_len;
 
       // NOTE: Acquiring this lock
       //       is part of the song and dance of using condition variables.
@@ -188,7 +177,6 @@ static void *sender_routine(void *const thread_arg) {
   return NULL;
 }
 
-/// \internal
 static struct incoming *accept_incoming(struct receiver *const rcvr) {
   int pthread_res;
 
@@ -220,13 +208,11 @@ static struct incoming *accept_incoming(struct receiver *const rcvr) {
   return &rcvr->chan->icmg;
 }
 
-/// \internal
 static void check_receiver(struct receiver *const rcvr) {
   assert(rcvr);
   assert(rcvr->user_cb);
 }
 
-/// \internal
 static void *receiver_routine(void *const thread_arg) {
   struct receiver *const rcvr = thread_arg;
   check_receiver(rcvr);
@@ -335,29 +321,20 @@ void adptc_listener_stop(adptc_listener const lhnd) {
     adptc_support_todo;
 }
 
-/// \internal
 static void check_incoming(struct incoming *const icmg) { assert(icmg); }
 
 [[nodiscard]] unsigned char const *
-adptc_listener_get_incoming_data(adptc_listener_incoming const ihnd) {
+adptc_listener_incoming_get_ptr(adptc_listener_incoming const ihnd) {
   struct incoming *const icmg = ihnd;
   check_incoming(icmg);
 
-  return icmg->data_buf;
+  return icmg->buf;
 }
 
 [[nodiscard]] size_t
-adptc_listener_get_incoming_data_len(adptc_listener_incoming const ihnd) {
+adptc_listener_incoming_get_len(adptc_listener_incoming const ihnd) {
   struct incoming *const icmg = ihnd;
   check_incoming(icmg);
 
-  return icmg->data_len;
-}
-
-[[nodiscard]] double
-adptc_listener_get_incoming_fill_ratio(adptc_listener_incoming const ihnd) {
-  struct incoming *const icmg = ihnd;
-  check_incoming(icmg);
-
-  return (double)icmg->data_len / (double)LISTENER_BUF_SIZE;
+  return icmg->len;
 }

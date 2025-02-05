@@ -1,4 +1,4 @@
-exe_srcs = files(
+client_srcs = files(
   'cli.c',
   'console.c',
   'main.c',
