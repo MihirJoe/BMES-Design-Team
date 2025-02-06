@@ -36,6 +36,7 @@ ADPTC_RESULT_WITH_OK_TYPE_AND_OS_ERROR(
 
 ADPTC_RESULT_WITH_OS_ERROR(
     adptc_listener_start_result,
+    adptc_listener_start_result_k_already_listening_error,
     adptc_listener_start_result_k_create_sender_thread_error,
     adptc_listener_start_result_k_create_receiver_thread_error)
 /// \endcond
@@ -43,21 +44,14 @@ ADPTC_RESULT_WITH_OS_ERROR(
 /// \public \static \memberof adptc_listener
 /// \brief
 /// Attempts to create a new listener.
-///
-/// \return
-/// A new listener.
 [[nodiscard]] adptc_listener_create_result adptc_listener_try_create(void);
 
 /// \public \memberof adptc_listener
 /// \brief
-/// Destroys a listener.
+/// Destroys the listener.
 ///
-/// This method releases resources owned by \a listener.
-///
-/// \pre
-/// \a listener is not listening.
-/// Either it never started listening,
-/// or it \ref adptc_listener_stop "stopped".
+/// If \a listener is listening, it is stopped.
+/// Then, resources owned by \a listener are released.
 ///
 /// On return from this method,
 /// \a listener no longer exists
@@ -90,16 +84,16 @@ adptc_listener_try_start(adptc_listener listener, int serial_fd,
 /// \brief
 /// Stops listening for ADAPT serial data.
 ///
-/// \pre
-/// \a listener is listening.
+/// This method has no effect
+/// if \a listener is not listening.
 void adptc_listener_stop(adptc_listener listener);
 
 /// \public \static \memberof adptc_listener_incoming
 /// \brief
 /// The upper bound on the number of incoming bytes.
 ///
-/// \ref adptc_listener_incoming_get_len will return a value
-/// no greater than this.
+/// \ref adptc_listener_incoming_get_len
+/// returns a value no greater than this.
 extern size_t const adptc_listener_incoming_buf_size;
 
 /// \public \memberof adptc_listener_incoming

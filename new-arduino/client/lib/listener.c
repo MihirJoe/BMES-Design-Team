@@ -8,7 +8,6 @@
 
 #include <assert.h>
 #include <stdatomic.h>
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,6 +47,7 @@ struct listener {
   struct receiver rcvr;
   pthread_t sndr_thread;
   pthread_t rcvr_thread;
+  bool is_lsning;
 };
 
 size_t const adptc_listener_incoming_buf_size = LISTENER_BUF_SIZE;
@@ -62,6 +62,7 @@ size_t const adptc_listener_incoming_buf_size = LISTENER_BUF_SIZE;
   lsnr->rcvr.continue_flag = (atomic_flag)ATOMIC_FLAG_INIT;
   lsnr->sndr.chan = &lsnr->chan;
   lsnr->rcvr.chan = &lsnr->chan;
+  lsnr->is_lsning = false;
 
   int pthread_res;
   pthread_mutexattr_t lock_attr;
@@ -100,6 +101,25 @@ size_t const adptc_listener_incoming_buf_size = LISTENER_BUF_SIZE;
   return adptc_result_ok_with(adptc_listener_create, lsnr);
 }
 
+static void stop_listening(struct listener *const lsnr) {
+  if (!lsnr->is_lsning)
+    return;
+
+  int pthread_res;
+
+  // Tell the receiver thread to stop.
+  atomic_flag_clear(&lsnr->rcvr.continue_flag);
+
+  // If the receiver thread is waiting on the condition variable, wake it up.
+  pthread_res = pthread_cond_signal(&lsnr->chan.rcvr_has_work);
+  assert(pthread_res == 0);
+
+  // Tell the sender thread to stop.
+  atomic_flag_clear(&lsnr->sndr.continue_flag);
+
+  lsnr->is_lsning = false;
+}
+
 static void check_listener(struct listener *const lsnr) {
   assert(lsnr);
   assert(lsnr->sndr.chan == &lsnr->chan);
@@ -111,6 +131,8 @@ void adptc_listener_destroy(adptc_listener lhnd) {
   check_listener(lsnr);
 
   int pthread_res;
+
+  stop_listening(lsnr);
 
   pthread_res = pthread_cond_destroy(&lsnr->chan.rcvr_has_work);
   assert(pthread_res == 0);
@@ -126,8 +148,6 @@ static void check_sender(struct sender *const sndr) { assert(sndr); }
 static void *sender_routine(void *const thread_arg) {
   struct sender *const sndr = thread_arg;
   check_sender(sndr);
-
-  // NOTE: this is a finite state machine.
 
   enum state {
     state_read,
@@ -152,8 +172,7 @@ static void *sender_routine(void *const thread_arg) {
           // Try again.
           break;
 
-        // TODO: report error
-        read_res = 0;
+        adptc_support_todo;
       }
 
       state = state_wait;
@@ -283,6 +302,9 @@ adptc_listener_try_start(adptc_listener const lhnd, int const serial_fd,
   struct listener *const lsnr = lhnd;
   check_listener(lsnr);
 
+  if (lsnr->is_lsning)
+    return adptc_result_error(adptc_listener_start, already_listening);
+
   atomic_store(&lsnr->chan.icmg_out_for_delivery, false);
   atomic_flag_test_and_set(&lsnr->chan.busy_flag);
   atomic_flag_test_and_set(&lsnr->sndr.continue_flag);
@@ -320,6 +342,8 @@ adptc_listener_try_start(adptc_listener const lhnd, int const serial_fd,
   pthread_res = pthread_detach(lsnr->rcvr_thread);
   assert(pthread_res == 0);
 
+  lsnr->is_lsning = true;
+
   return adptc_result_ok(adptc_listener_start);
 }
 
@@ -327,16 +351,7 @@ void adptc_listener_stop(adptc_listener const lhnd) {
   struct listener *const lsnr = lhnd;
   check_listener(lsnr);
 
-  int pthread_res;
-
-  atomic_flag_clear(&lsnr->rcvr.continue_flag);
-
-  // If the receiver thread is waiting on the condition variable,
-  // wake it up so that it can respond to the request to stop.
-  pthread_res = pthread_cond_signal(&lsnr->chan.rcvr_has_work);
-  assert(pthread_res == 0);
-
-  atomic_flag_clear(&lsnr->sndr.continue_flag);
+  stop_listening(lsnr);
 }
 
 static void check_incoming(struct incoming *const icmg) { assert(icmg); }
