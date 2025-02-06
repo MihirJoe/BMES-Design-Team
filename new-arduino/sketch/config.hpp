@@ -1,4 +1,5 @@
 /// \file
+/// Magic numbers.
 
 #ifndef ADAPT_SKETCH_CONFIG_H
 #define ADAPT_SKETCH_CONFIG_H

@@ -1,4 +1,5 @@
 /// \file
+/// Interpret command line arguments.
 
 #ifndef ADAPT_CLIENT_CLI_H
 #define ADAPT_CLIENT_CLI_H

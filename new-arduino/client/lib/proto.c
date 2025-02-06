@@ -43,9 +43,9 @@ adptc_proto_send_request_result
 adptc_proto_try_send_request(int const fd, unsigned char const req) {
   ssize_t const write_res = write(fd, &req, 1);
   if (write_res != 1)
-    return adptc_result_os_error(proto_send_request, write, write);
+    return adptc_result_os_error(adptc_proto_send_request, write, write);
 
-  return adptc_result_ok(proto_send_request);
+  return adptc_result_ok(adptc_proto_send_request);
 }
 
 [[nodiscard]] float adptc_proto_unmarshall_float(unsigned long const marsh) {
@@ -69,16 +69,18 @@ adptc_proto_try_send_request(int const fd, unsigned char const req) {
                             : sign * exp * coef;
 }
 
-adptc_proto_response_decoder adptc_proto_response_decoder_create(void) {
+adptc_proto_response_decoder_create_result
+adptc_proto_response_decoder_try_create(void) {
   struct response_decoder *const decdr =
       malloc(sizeof(struct response_decoder));
   if (!decdr)
-    return NULL;
+    return adptc_result_os_error(adptc_proto_response_decoder_create,
+                                 alloc_decoder, malloc);
 
   decdr->marsh_float = 0;
   decdr->rem_float_bytes = 0;
 
-  return decdr;
+  return adptc_result_ok_with(adptc_proto_response_decoder_create, decdr);
 }
 
 static void check_response_decoder(struct response_decoder *const decdr) {

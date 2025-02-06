@@ -15,14 +15,15 @@ struct monitor {
   adptc_proto_response_decoder resp_decdr;
 };
 
-adptc_monitor adptc_monitor_create(FILE *const file) {
+adptc_monitor adptc_monitor_try_create(FILE *const file) {
   struct monitor *const montr = malloc(sizeof(struct monitor));
   if (!montr)
     return NULL;
 
   montr->file = file;
 
-  montr->resp_decdr = adptc_proto_response_decoder_create();
+  // TODO: don't unwrap
+  montr->resp_decdr = adptc_proto_response_decoder_try_create().ok;
   if (!montr->resp_decdr) {
     free(montr);
     return NULL;

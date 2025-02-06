@@ -39,7 +39,8 @@ static PyObject *Listener_new(PyTypeObject *const up_type,
   if (!self)
     return NULL;
 
-  self->lsnr = adptc_listener_create();
+  // TODO: don't unwrap
+  self->lsnr = adptc_listener_try_create().ok;
   if (!self->lsnr) {
     Py_DECREF(self);
     return NULL;
@@ -95,7 +96,8 @@ static int Listener_init(PyObject *const up_self, PyObject *const up_args,
 
   if (!self->is_lsning) {
     Py_XSETREF(self->callable, Py_NewRef(callable));
-    adptc_listener_start(self->lsnr, serial_fd, listener_callback, callable);
+    adptc_listener_try_start(self->lsnr, serial_fd, listener_callback,
+                             callable);
   }
 
   self->is_lsning = true;

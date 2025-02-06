@@ -64,7 +64,7 @@ adptc_console_attend_result adptc_console_try_attend(int const serial_fd) {
     process_line(serial_fd, input_buf);
 
   if (ferror(stdin))
-    return adptc_result_error(console_attend, stdin);
+    return adptc_result_error(adptc_console_attend, stdin);
 
-  return adptc_result_ok(console_attend);
+  return adptc_result_ok(adptc_console_attend);
 }

@@ -20,15 +20,15 @@
 static adptc_serial_configure_result try_get_attr(int const fd,
                                                   struct termios *const tty) {
   if (tcgetattr(fd, tty) == -1)
-    return adptc_result_os_error(serial_configure, tcgetattr, tcgetattr);
+    return adptc_result_os_error(adptc_serial_configure, tcgetattr, tcgetattr);
 
-  return adptc_result_ok(serial_configure);
+  return adptc_result_ok(adptc_serial_configure);
 }
 
 static adptc_serial_configure_result try_set_attr(int const fd,
                                                   struct termios *const tty) {
   if (tcsetattr(fd, TCSANOW, tty) == -1)
-    return adptc_result_os_error(serial_configure, tcsetattr, tcsetattr);
+    return adptc_result_os_error(adptc_serial_configure, tcsetattr, tcsetattr);
 
   // NOTE: from `man 3 termios`:
   //         Note that tcsetattr() returns success if any of the requested
@@ -40,7 +40,7 @@ static adptc_serial_configure_result try_set_attr(int const fd,
   //       Because this is a simple, one-off client program,
   //       we will not perform any such verification.
 
-  return adptc_result_ok(serial_configure);
+  return adptc_result_ok(adptc_serial_configure);
 }
 
 static void configure_input_modes(tcflag_t *const iflag) {
@@ -89,11 +89,13 @@ static void configure_special_chars(cc_t cc[const]) {
 
 static adptc_serial_configure_result try_set_speed(struct termios *const tty) {
   if (cfsetispeed(tty, SERIAL_SPEED) == -1)
-    return adptc_result_os_error(serial_configure, cfsetispeed, cfsetispeed);
+    return adptc_result_os_error(adptc_serial_configure, cfsetispeed,
+                                 cfsetispeed);
   if (cfsetospeed(tty, SERIAL_SPEED) == -1)
-    return adptc_result_os_error(serial_configure, cfsetospeed, cfsetospeed);
+    return adptc_result_os_error(adptc_serial_configure, cfsetospeed,
+                                 cfsetospeed);
 
-  return adptc_result_ok(serial_configure);
+  return adptc_result_ok(adptc_serial_configure);
 }
 
 adptc_serial_configure_result adptc_serial_try_configure(int const fd) {

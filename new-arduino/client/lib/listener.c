@@ -1,7 +1,6 @@
-/// \file
-
 #include <adapt/client/listener.h>
 
+#include <adapt/client/result.h>
 #include <adapt/client/support.h>
 
 #include <pthread.h>
@@ -51,12 +50,18 @@ struct listener {
   pthread_t rcvr_thread;
 };
 
+ADPTC_RESULT_WITH_OS_ERROR(stop_sender_result, stop_sender_result_k_join_error)
+
+ADPTC_RESULT_WITH_OS_ERROR(stop_receiver_result,
+                           stop_receiver_result_k_cond_signal_error,
+                           stop_receiver_result_k_join_error)
+
 size_t const adptc_listener_incoming_buf_size = LISTENER_BUF_SIZE;
 
-[[nodiscard]] adptc_listener adptc_listener_create(void) {
+[[nodiscard]] adptc_listener_create_result adptc_listener_try_create(void) {
   struct listener *const lsnr = malloc(sizeof(struct listener));
   if (!lsnr)
-    return NULL;
+    return adptc_result_os_error(adptc_listener_create, alloc_listener, malloc);
 
   lsnr->chan.busy_flag = (atomic_flag)ATOMIC_FLAG_INIT;
   lsnr->sndr.continue_flag = (atomic_flag)ATOMIC_FLAG_INIT;
@@ -64,7 +69,42 @@ size_t const adptc_listener_incoming_buf_size = LISTENER_BUF_SIZE;
   lsnr->sndr.chan = &lsnr->chan;
   lsnr->rcvr.chan = &lsnr->chan;
 
-  return lsnr;
+  int pthread_res;
+  pthread_mutexattr_t lock_attr;
+
+  pthread_res = pthread_mutexattr_init(&lock_attr);
+  if (pthread_res != 0) {
+    assert(pthread_res == ENOMEM);
+    free(lsnr);
+    return adptc_result_os_error(adptc_listener_create, mutexattr_init,
+                                 pthread_mutexattr_init);
+  }
+
+  pthread_res = pthread_mutexattr_settype(&lock_attr, PTHREAD_MUTEX_ERRORCHECK);
+  assert(pthread_res == 0);
+
+  pthread_res = pthread_mutex_init(&lsnr->chan.icmg_lock, &lock_attr);
+  if (pthread_res != 0) {
+    assert(pthread_res != EINVAL);
+    pthread_mutexattr_destroy(&lock_attr);
+    free(lsnr);
+    return adptc_result_os_error(adptc_listener_create, mutex_init,
+                                 pthread_mutex_init);
+  }
+
+  pthread_res = pthread_mutexattr_destroy(&lock_attr);
+  assert(pthread_res == 0);
+
+  pthread_res = pthread_cond_init(&lsnr->chan.rcvr_has_work, NULL);
+  if (pthread_res != 0) {
+    assert(pthread_res != EINVAL);
+    pthread_mutex_destroy(&lsnr->chan.icmg_lock);
+    free(lsnr);
+    return adptc_result_os_error(adptc_listener_create, cond_init,
+                                 pthread_cond_init);
+  }
+
+  return adptc_result_ok_with(adptc_listener_create, lsnr);
 }
 
 static void check_listener(struct listener *const lsnr) {
@@ -76,6 +116,14 @@ static void check_listener(struct listener *const lsnr) {
 void adptc_listener_destroy(adptc_listener lhnd) {
   struct listener *const lsnr = lhnd;
   check_listener(lsnr);
+
+  int pthread_res;
+
+  pthread_res = pthread_cond_destroy(&lsnr->chan.rcvr_has_work);
+  assert(pthread_res == 0);
+
+  pthread_res = pthread_mutex_destroy(&lsnr->chan.icmg_lock);
+  assert(pthread_res == 0);
 
   free(lsnr);
 }
@@ -177,7 +225,7 @@ static void *sender_routine(void *const thread_arg) {
   return NULL;
 }
 
-static struct incoming *accept_incoming(struct receiver *const rcvr) {
+static struct incoming *try_accept_incoming(struct receiver *const rcvr) {
   int pthread_res;
 
   // Tell the sender thread
@@ -224,7 +272,7 @@ static void *receiver_routine(void *const thread_arg) {
     adptc_support_todo;
 
   struct incoming *icmg;
-  while ((icmg = accept_incoming(rcvr)))
+  while ((icmg = try_accept_incoming(rcvr)))
     rcvr->user_cb(icmg, rcvr->user_cb_env);
 
   pthread_res = pthread_mutex_unlock(&rcvr->chan->icmg_lock);
@@ -234,58 +282,21 @@ static void *receiver_routine(void *const thread_arg) {
   return NULL;
 }
 
-void adptc_listener_start(adptc_listener const lhnd, int const serial_fd,
-                          adptc_listener_callback const user_cb,
-                          void *const user_cb_env) {
-  struct listener *const lsnr = lhnd;
-  check_listener(lsnr);
-
+stop_sender_result try_stop_sender(struct listener *const lsnr) {
   int pthread_res;
 
-  atomic_store(&lsnr->chan.icmg_out_for_delivery, false);
-  atomic_flag_test_and_set(&lsnr->chan.busy_flag);
-  atomic_flag_test_and_set(&lsnr->sndr.continue_flag);
-  atomic_flag_test_and_set(&lsnr->rcvr.continue_flag);
+  // Indicate to the sender thread that we are done.
+  atomic_flag_clear(&lsnr->sndr.continue_flag);
 
-  pthread_mutexattr_t lock_attr;
-
-  pthread_res = pthread_mutexattr_init(&lock_attr);
+  // Block until the sender thread exits.
+  pthread_res = pthread_join(lsnr->sndr_thread, NULL);
   if (pthread_res != 0)
-    adptc_support_todo;
+    return adptc_result_os_error(stop_sender, join, pthread_join);
 
-  // TODO: check error
-  pthread_mutexattr_settype(&lock_attr, PTHREAD_MUTEX_ERRORCHECK);
-
-  pthread_res = pthread_mutex_init(&lsnr->chan.icmg_lock, &lock_attr);
-  if (pthread_res != 0)
-    adptc_support_todo;
-
-  pthread_res = pthread_mutexattr_destroy(&lock_attr);
-  if (pthread_res != 0)
-    adptc_support_todo;
-
-  pthread_res = pthread_cond_init(&lsnr->chan.rcvr_has_work, NULL);
-  if (pthread_res != 0)
-    adptc_support_todo;
-
-  lsnr->sndr.serial_fd = serial_fd;
-  pthread_res =
-      pthread_create(&lsnr->sndr_thread, NULL, sender_routine, &lsnr->sndr);
-  if (pthread_res != 0)
-    adptc_support_todo;
-
-  lsnr->rcvr.user_cb = user_cb;
-  lsnr->rcvr.user_cb_env = user_cb_env;
-  pthread_res =
-      pthread_create(&lsnr->rcvr_thread, NULL, receiver_routine, &lsnr->rcvr);
-  if (pthread_res != 0)
-    adptc_support_todo;
+  return adptc_result_ok(stop_sender);
 }
 
-void adptc_listener_stop(adptc_listener const lhnd) {
-  struct listener *const lsnr = lhnd;
-  check_listener(lsnr);
-
+stop_receiver_result try_stop_receiver(struct listener *const lsnr) {
   int pthread_res;
 
   // Indicate to the receiver thread that we are done.
@@ -294,31 +305,68 @@ void adptc_listener_stop(adptc_listener const lhnd) {
   // If the receiver thread is waiting on the condition variable,
   // wake it up so that it can respond to the request to stop.
   pthread_res = pthread_cond_signal(&lsnr->chan.rcvr_has_work);
-  if (pthread_res != 0)
-    adptc_support_todo;
+  if (pthread_res != 0) {
+    assert(pthread_res != EINVAL);
+    return adptc_result_os_error(stop_receiver, cond_signal,
+                                 pthread_cond_signal);
+  }
 
   // Block until the receiver thread exits.
   pthread_res = pthread_join(lsnr->rcvr_thread, NULL);
   if (pthread_res != 0)
-    adptc_support_todo;
+    return adptc_result_os_error(stop_receiver, join, pthread_join);
 
-  // Indicate to the sender thread that we are done.
-  atomic_flag_clear(&lsnr->sndr.continue_flag);
+  return adptc_result_ok(stop_receiver);
+}
 
-  // Block until the sender thread exits.
-  pthread_res = pthread_join(lsnr->sndr_thread, NULL);
-  if (pthread_res != 0)
-    adptc_support_todo;
+adptc_listener_start_result
+adptc_listener_try_start(adptc_listener const lhnd, int const serial_fd,
+                         adptc_listener_callback const user_cb,
+                         void *const user_cb_env) {
+  struct listener *const lsnr = lhnd;
+  check_listener(lsnr);
 
-  // Destroy the condition variable.
-  pthread_res = pthread_cond_destroy(&lsnr->chan.rcvr_has_work);
-  if (pthread_res != 0)
-    adptc_support_todo;
+  atomic_store(&lsnr->chan.icmg_out_for_delivery, false);
+  atomic_flag_test_and_set(&lsnr->chan.busy_flag);
+  atomic_flag_test_and_set(&lsnr->sndr.continue_flag);
+  atomic_flag_test_and_set(&lsnr->rcvr.continue_flag);
 
-  // Destroy the lock.
-  pthread_res = pthread_mutex_destroy(&lsnr->chan.icmg_lock);
-  if (pthread_res != 0)
-    adptc_support_todo;
+  int pthread_res;
+
+  lsnr->sndr.serial_fd = serial_fd;
+  pthread_res =
+      pthread_create(&lsnr->sndr_thread, NULL, sender_routine, &lsnr->sndr);
+  if (pthread_res != 0) {
+    assert(pthread_res != EINVAL);
+    return adptc_result_os_error(adptc_listener_start, create_sender_thread,
+                                 pthread_create);
+  }
+
+  lsnr->rcvr.user_cb = user_cb;
+  lsnr->rcvr.user_cb_env = user_cb_env;
+  pthread_res =
+      pthread_create(&lsnr->rcvr_thread, NULL, receiver_routine, &lsnr->rcvr);
+  if (pthread_res != 0) {
+    assert(pthread_res != EINVAL);
+
+    // Oops. We created the sender thread but not the receiver thread.
+    // Tell the sender thread to die.
+    try_stop_sender(lsnr);
+
+    return adptc_result_os_error(adptc_listener_start, create_receiver_thread,
+                                 pthread_create);
+  }
+
+  return adptc_result_ok(adptc_listener_start);
+}
+
+void adptc_listener_stop(adptc_listener const lhnd) {
+  struct listener *const lsnr = lhnd;
+  check_listener(lsnr);
+
+  // TODO: check errors
+  try_stop_receiver(lsnr);
+  try_stop_sender(lsnr);
 }
 
 static void check_incoming(struct incoming *const icmg) { assert(icmg); }

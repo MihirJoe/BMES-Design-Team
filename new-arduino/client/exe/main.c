@@ -38,9 +38,11 @@ int main(int const argc, char *argv[const]) {
 
   adptc_serial_try_configure(serial_fd);
 
-  adptc_monitor const monitor = adptc_monitor_create(monitor_file);
-  adptc_listener const listener = adptc_listener_create();
-  adptc_listener_start(listener, serial_fd, adptc_monitor_callback, monitor);
+  adptc_monitor const monitor = adptc_monitor_try_create(monitor_file);
+  // TODO: don't unwrap
+  adptc_listener const listener = adptc_listener_try_create().ok;
+  adptc_listener_try_start(listener, serial_fd, adptc_monitor_callback,
+                           monitor);
 
   adptc_console_try_attend(serial_fd);
 
