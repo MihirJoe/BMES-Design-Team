@@ -36,10 +36,14 @@ int main(int const argc, char *argv[const]) {
     return EXIT_FAILURE;
   }
 
+  // TODO: check errors
+
   adptc_serial_try_configure(serial_fd);
 
-  adptc_monitor const monitor = adptc_monitor_try_create(monitor_file);
-  // TODO: don't unwrap
+  adptc_proto_response_decoder const response_decoder =
+      adptc_proto_response_decoder_try_create().ok;
+  adptc_monitor const monitor =
+      adptc_monitor_try_create(monitor_file, response_decoder).ok;
   adptc_listener const listener = adptc_listener_try_create().ok;
   adptc_listener_try_start(listener, serial_fd, adptc_monitor_callback,
                            monitor);

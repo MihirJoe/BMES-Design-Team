@@ -4,6 +4,7 @@
 
 #include <adapt/client/listener.h>
 #include <adapt/client/proto.h>
+#include <adapt/client/result.h>
 #include <adapt/proto.h>
 
 #include <assert.h>
@@ -15,21 +16,17 @@ struct monitor {
   adptc_proto_response_decoder resp_decdr;
 };
 
-adptc_monitor adptc_monitor_try_create(FILE *const file) {
+adptc_monitor_create_result
+adptc_monitor_try_create(FILE *const file,
+                         adptc_proto_response_decoder const resp_decdr) {
   struct monitor *const montr = malloc(sizeof(struct monitor));
   if (!montr)
-    return NULL;
+    return adptc_result_os_error(adptc_monitor_create, alloc_monitor, malloc);
 
   montr->file = file;
+  montr->resp_decdr = resp_decdr;
 
-  // TODO: don't unwrap
-  montr->resp_decdr = adptc_proto_response_decoder_try_create().ok;
-  if (!montr->resp_decdr) {
-    free(montr);
-    return NULL;
-  }
-
-  return montr;
+  return adptc_result_ok_with(adptc_monitor_create, montr);
 }
 
 static void check_monitor(struct monitor *const montr) {
