@@ -50,12 +50,6 @@ struct listener {
   pthread_t rcvr_thread;
 };
 
-ADPTC_RESULT_WITH_OS_ERROR(stop_sender_result, stop_sender_result_k_join_error)
-
-ADPTC_RESULT_WITH_OS_ERROR(stop_receiver_result,
-                           stop_receiver_result_k_cond_signal_error,
-                           stop_receiver_result_k_join_error)
-
 size_t const adptc_listener_incoming_buf_size = LISTENER_BUF_SIZE;
 
 [[nodiscard]] adptc_listener_create_result adptc_listener_try_create(void) {
@@ -74,7 +68,6 @@ size_t const adptc_listener_incoming_buf_size = LISTENER_BUF_SIZE;
 
   pthread_res = pthread_mutexattr_init(&lock_attr);
   if (pthread_res != 0) {
-    assert(pthread_res == ENOMEM);
     free(lsnr);
     return adptc_result_os_error(adptc_listener_create, mutexattr_init,
                                  pthread_mutexattr_init);
@@ -143,6 +136,7 @@ static void *sender_routine(void *const thread_arg) {
   };
 
   int pthread_res;
+  ssize_t read_res;
 
   enum state state = state_read;
 
@@ -152,11 +146,15 @@ static void *sender_routine(void *const thread_arg) {
   while (atomic_flag_test_and_set(&sndr->continue_flag)) {
     switch (state) {
     case state_read:
-      ssize_t read_res =
-          read(sndr->serial_fd, sndr->chan->read_buf, LISTENER_BUF_SIZE);
-      if (read_res <= 0)
-        // TODO
+      read_res = read(sndr->serial_fd, sndr->chan->read_buf, LISTENER_BUF_SIZE);
+      if (read_res == -1) {
+        if (errno == ETIMEDOUT)
+          // Try again.
+          break;
+
+        // TODO: report error
         read_res = 0;
+      }
 
       state = state_wait;
       break;
@@ -210,22 +208,19 @@ static void *sender_routine(void *const thread_arg) {
       // Wake up the receiver thread
       // (if it is waiting on the condition variable).
       pthread_res = pthread_cond_signal(&sndr->chan->rcvr_has_work);
-      if (pthread_res != 0)
-        adptc_support_todo;
+      assert(pthread_res == 0);
 
       // While the receiver thread is processing the incoming data,
       // begin the next read.
       state = state_read;
       break;
-
-    default: adptc_support_todo;
     }
   }
 
   return NULL;
 }
 
-static struct incoming *try_accept_incoming(struct receiver *const rcvr) {
+static struct incoming *try_get_incoming(struct receiver *const rcvr) {
   int pthread_res;
 
   // Tell the sender thread
@@ -238,14 +233,13 @@ static struct incoming *try_accept_incoming(struct receiver *const rcvr) {
     // Wait until someone tells us to wake up.
     // NOTE: waiting on a condition variable releases the lock,
     //       allowing the sender thread to acquire it
-    //       and set the 'out-for-delivery' flag.
+    //       and set the 'out-for-delivery' boolean.
     pthread_res =
         pthread_cond_wait(&rcvr->chan->rcvr_has_work, &rcvr->chan->icmg_lock);
-    if (pthread_res != 0)
-      adptc_support_todo;
+    assert(pthread_res == 0);
   }
 
-  // The main thread has requested for us to exit.
+  // The main thread has requested us to quit.
   // Return `NULL` so that the caller knows we are done.
   if (!should_continue)
     return NULL;
@@ -272,7 +266,7 @@ static void *receiver_routine(void *const thread_arg) {
     adptc_support_todo;
 
   struct incoming *icmg;
-  while ((icmg = try_accept_incoming(rcvr)))
+  while ((icmg = try_get_incoming(rcvr)))
     rcvr->user_cb(icmg, rcvr->user_cb_env);
 
   pthread_res = pthread_mutex_unlock(&rcvr->chan->icmg_lock);
@@ -280,43 +274,6 @@ static void *receiver_routine(void *const thread_arg) {
     adptc_support_todo;
 
   return NULL;
-}
-
-stop_sender_result try_stop_sender(struct listener *const lsnr) {
-  int pthread_res;
-
-  // Indicate to the sender thread that we are done.
-  atomic_flag_clear(&lsnr->sndr.continue_flag);
-
-  // Block until the sender thread exits.
-  pthread_res = pthread_join(lsnr->sndr_thread, NULL);
-  if (pthread_res != 0)
-    return adptc_result_os_error(stop_sender, join, pthread_join);
-
-  return adptc_result_ok(stop_sender);
-}
-
-stop_receiver_result try_stop_receiver(struct listener *const lsnr) {
-  int pthread_res;
-
-  // Indicate to the receiver thread that we are done.
-  atomic_flag_clear(&lsnr->rcvr.continue_flag);
-
-  // If the receiver thread is waiting on the condition variable,
-  // wake it up so that it can respond to the request to stop.
-  pthread_res = pthread_cond_signal(&lsnr->chan.rcvr_has_work);
-  if (pthread_res != 0) {
-    assert(pthread_res != EINVAL);
-    return adptc_result_os_error(stop_receiver, cond_signal,
-                                 pthread_cond_signal);
-  }
-
-  // Block until the receiver thread exits.
-  pthread_res = pthread_join(lsnr->rcvr_thread, NULL);
-  if (pthread_res != 0)
-    return adptc_result_os_error(stop_receiver, join, pthread_join);
-
-  return adptc_result_ok(stop_receiver);
 }
 
 adptc_listener_start_result
@@ -342,6 +299,9 @@ adptc_listener_try_start(adptc_listener const lhnd, int const serial_fd,
                                  pthread_create);
   }
 
+  pthread_res = pthread_detach(lsnr->sndr_thread);
+  assert(pthread_res == 0);
+
   lsnr->rcvr.user_cb = user_cb;
   lsnr->rcvr.user_cb_env = user_cb_env;
   pthread_res =
@@ -350,12 +310,15 @@ adptc_listener_try_start(adptc_listener const lhnd, int const serial_fd,
     assert(pthread_res != EINVAL);
 
     // Oops. We created the sender thread but not the receiver thread.
-    // Tell the sender thread to die.
-    try_stop_sender(lsnr);
+    // Tell the sender thread to stop.
+    atomic_flag_clear(&lsnr->sndr.continue_flag);
 
     return adptc_result_os_error(adptc_listener_start, create_receiver_thread,
                                  pthread_create);
   }
+
+  pthread_res = pthread_detach(lsnr->rcvr_thread);
+  assert(pthread_res == 0);
 
   return adptc_result_ok(adptc_listener_start);
 }
@@ -364,9 +327,16 @@ void adptc_listener_stop(adptc_listener const lhnd) {
   struct listener *const lsnr = lhnd;
   check_listener(lsnr);
 
-  // TODO: check errors
-  try_stop_receiver(lsnr);
-  try_stop_sender(lsnr);
+  int pthread_res;
+
+  atomic_flag_clear(&lsnr->rcvr.continue_flag);
+
+  // If the receiver thread is waiting on the condition variable,
+  // wake it up so that it can respond to the request to stop.
+  pthread_res = pthread_cond_signal(&lsnr->chan.rcvr_has_work);
+  assert(pthread_res == 0);
+
+  atomic_flag_clear(&lsnr->sndr.continue_flag);
 }
 
 static void check_incoming(struct incoming *const icmg) { assert(icmg); }

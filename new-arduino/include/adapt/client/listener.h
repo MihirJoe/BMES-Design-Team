@@ -54,6 +54,11 @@ ADPTC_RESULT_WITH_OS_ERROR(
 ///
 /// This method releases resources owned by \a listener.
 ///
+/// \pre
+/// \a listener is not listening.
+/// Either it never started listening,
+/// or it \ref adptc_listener_stop "stopped".
+///
 /// On return from this method,
 /// \a listener no longer exists
 /// and must not be used in further method calls.
@@ -61,7 +66,7 @@ void adptc_listener_destroy(adptc_listener listener);
 
 /// \public \memberof adptc_listener
 /// \brief
-/// Starts listening for ADAPT serial data.
+/// Attempts to begin listening for ADAPT serial data.
 ///
 /// \a callback is called when incoming data is available.
 ///
