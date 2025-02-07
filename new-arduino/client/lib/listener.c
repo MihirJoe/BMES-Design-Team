@@ -3,6 +3,7 @@
 #include <adapt/client/result.h>
 #include <adapt/client/support.h>
 
+#include <fcntl.h>
 #include <pthread.h>
 #include <unistd.h>
 
@@ -101,23 +102,31 @@ size_t const adptc_listener_incoming_buf_size = LISTENER_BUF_SIZE;
   return adptc_result_ok_with(adptc_listener_create, lsnr);
 }
 
-static void stop_listening(struct listener *const lsnr) {
-  if (!lsnr->is_lsning)
-    return;
-
+static void stop_sender(struct listener *const lsnr) {
   int pthread_res;
 
-  // Tell the receiver thread to stop.
+  atomic_flag_clear(&lsnr->sndr.continue_flag);
+
+  pthread_res = pthread_join(lsnr->sndr_thread, NULL);
+  assert(pthread_res == 0);
+}
+
+static void stop_receiver(struct listener *const lsnr) {
+  int pthread_res;
+
   atomic_flag_clear(&lsnr->rcvr.continue_flag);
 
   // If the receiver thread is waiting on the condition variable, wake it up.
   pthread_res = pthread_cond_signal(&lsnr->chan.rcvr_has_work);
   assert(pthread_res == 0);
 
-  // Tell the sender thread to stop.
-  atomic_flag_clear(&lsnr->sndr.continue_flag);
+  pthread_res = pthread_join(lsnr->rcvr_thread, NULL);
+  assert(pthread_res == 0);
+}
 
-  lsnr->is_lsning = false;
+static void stop_sender_and_receiver(struct listener *const lsnr) {
+  stop_sender(lsnr);
+  stop_receiver(lsnr);
 }
 
 static void check_listener(struct listener *const lsnr) {
@@ -132,7 +141,10 @@ void adptc_listener_destroy(adptc_listener lhnd) {
 
   int pthread_res;
 
-  stop_listening(lsnr);
+  if (lsnr->is_lsning) {
+    adptc_support_debug_str("still listening; stopping first");
+    stop_sender_and_receiver(lsnr);
+  }
 
   pthread_res = pthread_cond_destroy(&lsnr->chan.rcvr_has_work);
   assert(pthread_res == 0);
@@ -168,9 +180,10 @@ static void *sender_routine(void *const thread_arg) {
     case state_read:
       read_res = read(sndr->serial_fd, sndr->chan->read_buf, LISTENER_BUF_SIZE);
       if (read_res == -1) {
-        if (errno == ETIMEDOUT)
-          // Try again.
+        if (errno == ETIMEDOUT) {
+          adptc_support_debug_str("read() timed out; trying again");
           break;
+        }
 
         adptc_support_todo;
       }
@@ -295,6 +308,10 @@ static void *receiver_routine(void *const thread_arg) {
   return NULL;
 }
 
+static bool fd_is_bad(int const fd) {
+  return fcntl(fd, F_GETFD) == -1 && errno == EBADF;
+}
+
 adptc_listener_start_result
 adptc_listener_try_start(adptc_listener const lhnd, int const serial_fd,
                          adptc_listener_callback const user_cb,
@@ -302,17 +319,19 @@ adptc_listener_try_start(adptc_listener const lhnd, int const serial_fd,
   struct listener *const lsnr = lhnd;
   check_listener(lsnr);
 
+  assert(!fd_is_bad(serial_fd));
+  assert(user_cb);
+
+  int pthread_res;
+
   if (lsnr->is_lsning)
     return adptc_result_error(adptc_listener_start, already_listening);
 
   atomic_store(&lsnr->chan.icmg_out_for_delivery, false);
   atomic_flag_test_and_set(&lsnr->chan.busy_flag);
-  atomic_flag_test_and_set(&lsnr->sndr.continue_flag);
-  atomic_flag_test_and_set(&lsnr->rcvr.continue_flag);
-
-  int pthread_res;
-
   lsnr->sndr.serial_fd = serial_fd;
+  atomic_flag_test_and_set(&lsnr->sndr.continue_flag);
+
   pthread_res =
       pthread_create(&lsnr->sndr_thread, NULL, sender_routine, &lsnr->sndr);
   if (pthread_res != 0) {
@@ -321,26 +340,18 @@ adptc_listener_try_start(adptc_listener const lhnd, int const serial_fd,
                                  pthread_create);
   }
 
-  pthread_res = pthread_detach(lsnr->sndr_thread);
-  assert(pthread_res == 0);
-
   lsnr->rcvr.user_cb = user_cb;
   lsnr->rcvr.user_cb_env = user_cb_env;
+  atomic_flag_test_and_set(&lsnr->rcvr.continue_flag);
+
   pthread_res =
       pthread_create(&lsnr->rcvr_thread, NULL, receiver_routine, &lsnr->rcvr);
   if (pthread_res != 0) {
     assert(pthread_res != EINVAL);
-
-    // Oops. We created the sender thread but not the receiver thread.
-    // Tell the sender thread to stop.
-    atomic_flag_clear(&lsnr->sndr.continue_flag);
-
+    stop_sender(lsnr);
     return adptc_result_os_error(adptc_listener_start, create_receiver_thread,
                                  pthread_create);
   }
-
-  pthread_res = pthread_detach(lsnr->rcvr_thread);
-  assert(pthread_res == 0);
 
   lsnr->is_lsning = true;
 
@@ -351,7 +362,13 @@ void adptc_listener_stop(adptc_listener const lhnd) {
   struct listener *const lsnr = lhnd;
   check_listener(lsnr);
 
-  stop_listening(lsnr);
+  if (!lsnr->is_lsning) {
+    adptc_support_debug_str("not listening; nothing to do");
+    return;
+  }
+
+  stop_sender_and_receiver(lsnr);
+  lsnr->is_lsning = false;
 }
 
 static void check_incoming(struct incoming *const icmg) { assert(icmg); }
