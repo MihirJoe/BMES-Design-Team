@@ -19,6 +19,9 @@ struct monitor {
 adptc_monitor_create_result
 adptc_monitor_try_create(FILE *const file,
                          adptc_proto_response_decoder const resp_decdr) {
+  assert(file);
+  assert(resp_decdr);
+
   struct monitor *const montr = malloc(sizeof(struct monitor));
   if (!montr)
     return adptc_result_os_error(adptc_monitor_create, alloc_monitor, malloc);
@@ -53,7 +56,7 @@ void adptc_monitor_callback(adptc_listener_incoming const icmg,
 
   for (size_t i = 0; i < icmg_data_len; i++) {
     struct adptc_proto_response const *const resp =
-        adptc_proto_response_decoder_feed(&montr->resp_decdr, icmg_data[i]);
+        adptc_proto_response_decoder_feed(montr->resp_decdr, icmg_data[i]);
     if (!resp)
       continue;
 
